@@ -56,12 +56,14 @@ def weather_for(idf: Path) -> Path:
 def file_digest(path: Path) -> str:
     if not path.exists():
         return "missing"
-    if path.suffix in (".err", ".eio", ".rdd", ".mdd"):
-        lines = [ln for ln in path.read_text(errors="replace").splitlines() if not ERR_LINE_FILTER.search(ln)]
-        data = "\n".join(lines).encode()
-    else:
-        data = path.read_bytes()
-    return hashlib.sha256(data).hexdigest()[:16]
+    # Every compared file starts with a "Program Version" line that carries the run's time stamp
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for line in f:
+            if ERR_LINE_FILTER.search(line.decode(errors="replace")):
+                continue
+            h.update(line)
+    return h.hexdigest()[:16]
 
 
 def run_once(exe: Path, idf: Path, epw: Path, outdir: Path, threads: int, mode: str, timings: bool, extra_env: dict) -> dict:

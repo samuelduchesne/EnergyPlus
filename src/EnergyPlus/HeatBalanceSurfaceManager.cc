@@ -1562,6 +1562,7 @@ void AllocateSurfaceHeatBalArrays(EnergyPlusData &state)
 
     state.dataHeatBalSurf->SurfTempIn.dimension(state.dataSurface->TotSurfaces, 0.0);
     state.dataHeatBalSurf->SurfTempInsOld.dimension(state.dataSurface->TotSurfaces, 0.0);
+    state.dataHeatBalSurf->SurfTempForRadiation.dimension(state.dataSurface->TotSurfaces, 0.0);
     state.dataHeatBalSurf->SurfTempInTmp.dimension(state.dataSurface->TotSurfaces, 0.0);
     state.dataHeatBalSurf->SurfTempInTmpOld.dimension(state.dataSurface->TotSurfaces, 0.0);
     state.dataHeatBalSurfMgr->RefAirTemp.dimension(state.dataSurface->TotSurfaces, 0.0);
@@ -8241,14 +8242,19 @@ void CalcHeatBalanceInsideSurf2(EnergyPlusData &state,
         }
     }
 
-    Array1D<Real64> surfTempForRadiation(state.dataSurface->TotSurfaces);
+    // Persistent (state-owned) rather than a per-call heap allocation of TotSurfaces reals
+    auto &surfTempForRadiation = state.dataHeatBalSurf->SurfTempForRadiation;
     bool Converged = false; // .TRUE. if inside heat balance has converged
     while (!Converged) {    // Start of main inside heat balance DO loop...
 
-        state.dataHeatBalSurf->SurfTempInsOld = state.dataHeatBalSurf->SurfTempIn; // Keep track of last iteration's temperature values
-
-        state.dataHeatBalSurf->SurfTempInTmpOld = state.dataHeatBalSurf->SurfTempInTmp;
-        surfTempForRadiation = state.dataHeatBalSurf->SurfTempIn;
+        // Keep track of last iteration's temperature values for the surfaces being simulated. The radiant exchange
+        // reads every heat transfer surface of the enclosures it processes, so its temperature array covers all of them.
+        for (int const surfNum : HTSurfs) {
+            state.dataHeatBalSurf->SurfTempInsOld(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
+        }
+        for (int const surfNum : state.dataSurface->AllHTSurfaceList) {
+            surfTempForRadiation(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
+        }
 
         for (int const surfNum : state.dataSurface->intMovInsulSurfNums) {
             if (state.dataSurface->intMovInsuls(surfNum).present) {
@@ -9127,8 +9133,15 @@ void CalcHeatBalanceInsideSurf2CTFOnly(EnergyPlusData &state,
     bool Converged = false; // .TRUE. if inside heat balance has converged
     while (!Converged) {    // Start of main inside heat balance iteration loop...
 
-        state.dataHeatBalSurf->SurfTempInsOld = state.dataHeatBalSurf->SurfTempIn; // Keep track of last iteration's temperature values
-        state.dataHeatBalSurf->SurfTempInTmpOld = state.dataHeatBalSurf->SurfTempInTmp;
+        // Keep track of last iteration's temperature values for the surfaces being simulated
+        for (int zoneNum = FirstZone; zoneNum <= LastZone; ++zoneNum) {
+            for (int spaceNum : state.dataHeatBal->Zone(zoneNum).spaceIndexes) {
+                auto const &thisSpace = state.dataHeatBal->space(spaceNum);
+                for (int surfNum = thisSpace.HTSurfaceFirst; surfNum <= thisSpace.HTSurfaceLast; ++surfNum) {
+                    state.dataHeatBalSurf->SurfTempInsOld(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
+                }
+            }
+        }
 
         HeatBalanceIntRadExchange::CalcInteriorRadExchange(state,
                                                            state.dataHeatBalSurf->SurfTempInTmp,
