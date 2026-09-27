@@ -108,6 +108,7 @@
 #include <EnergyPlus/ZoneContaminantPredictorCorrector.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::HVACManager {
 
@@ -131,6 +132,7 @@ constexpr Real64 sum_square_ConvergenceHistoryARR(30.0);
 
 void ManageHVAC(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::HVAC);
 
     // SUBROUTINE INFORMATION:
     //       AUTHORS:  Russ Taylor, Dan Fisher
@@ -243,7 +245,10 @@ void ManageHVAC(EnergyPlusData &state)
     ZoneEquipmentManager::CalcAirFlowSimple(state);
     if (state.afn->simulation_control.type != AirflowNetwork::ControlType::NoMultizoneOrDistribution) {
         state.afn->RollBackFlag = false;
-        state.afn->manage_balance(false);
+        {
+            Perf::ScopedTimer afnTimer(state, Perf::Timer::AirflowNetwork);
+            state.afn->manage_balance(false);
+        }
     }
 
     SetHeatToReturnAirFlag(state);
@@ -341,7 +346,10 @@ void ManageHVAC(EnergyPlusData &state)
             ZoneEquipmentManager::CalcAirFlowSimple(state, SysTimestepLoop);
             if (state.afn->simulation_control.type != AirflowNetwork::ControlType::NoMultizoneOrDistribution) {
                 state.afn->RollBackFlag = false;
-                state.afn->manage_balance(false);
+                {
+                    Perf::ScopedTimer afnTimer(state, Perf::Timer::AirflowNetwork);
+                    state.afn->manage_balance(false);
+                }
             }
 
             InternalHeatGains::UpdateInternalGainValues(state, true, true);
@@ -690,6 +698,7 @@ void ManageHVAC(EnergyPlusData &state)
 
 void SimHVAC(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::SimHVAC);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR:          Dan Fisher
@@ -1823,6 +1832,7 @@ void SimSelectedEquipment(EnergyPlusData &state,
         state.dataHVACMgr->RepIterAir = 0;
         // Call AirflowNetwork simulation to calculate air flows and pressures
         if (state.afn->simulation_control.type != AirflowNetwork::ControlType::NoMultizoneOrDistribution) {
+            Perf::ScopedTimer afnTimer(state, Perf::Timer::AirflowNetwork);
             state.afn->manage_balance(FirstHVACIteration);
         }
         SimAirServingZones::ManageAirLoops(state, FirstHVACIteration, SimAirLoops, SimZoneEquipment);
@@ -1850,6 +1860,7 @@ void SimSelectedEquipment(EnergyPlusData &state,
             // Call AirflowNetwork simulation to calculate air flows and pressures
             bool ResimulateAirZone = false;
             if (state.afn->simulation_control.type != AirflowNetwork::ControlType::NoMultizoneOrDistribution) {
+                Perf::ScopedTimer afnTimer(state, Perf::Timer::AirflowNetwork);
                 state.afn->manage_balance(FirstHVACIteration, IterAir, ResimulateAirZone);
             }
             if (SimAirLoops) {
@@ -2319,6 +2330,7 @@ void ReportInfiltrations(EnergyPlusData &state)
 
 void ReportAirHeatBalance(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ReportAirHB);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Linda Lawrie

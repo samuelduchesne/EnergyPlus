@@ -128,6 +128,7 @@
 #include <EnergyPlus/WindowManagerExteriorData.hh>
 #include <EnergyPlus/WindowManagerExteriorThermal.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::HeatBalanceSurfaceManager {
 
@@ -336,6 +337,7 @@ void UpdateVariableAbsorptancesIn(EnergyPlusData &state)
 
 void InitSurfaceHeatBalance(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::InitSurfaceHB);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Richard J. Liesen
@@ -2726,6 +2728,7 @@ void EvalInsideMovableInsulation(EnergyPlusData &state)
 
 void InitSolarHeatGains(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::InitSolarHeatGains);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Anonymous
@@ -5482,6 +5485,7 @@ void UpdateFinalSurfaceHeatBalance(EnergyPlusData &state)
 
 void UpdateThermalHistories(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ThermalHistories);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Russ Taylor
@@ -6900,6 +6904,7 @@ void ReportVisualResilience(EnergyPlusData &state)
 
 void ReportSurfaceHeatBalance(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ReportSurfaceHB);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Linda Lawrie
@@ -7247,6 +7252,7 @@ void ReportIntMovInsInsideSurfTemp(EnergyPlusData &state)
 void CalcHeatBalanceOutsideSurf(EnergyPlusData &state,
                                 ObjexxFCL::Optional_int_const ZoneToResimulate) // if passed in, then only calculate surfaces that have this zone
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::OutsideHB);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         George Walton
@@ -8033,6 +8039,7 @@ Real64 GetQdotConvOutPerArea(EnergyPlusData &state, int const SurfNum)
 void CalcHeatBalanceInsideSurf(EnergyPlusData &state,
                                ObjexxFCL::Optional_int_const ZoneToResimulate) // if passed in, then only calculate surfaces that have this zone
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::InsideHB);
     if (state.dataHeatBalSurfMgr->calcHeatBalInsideSurfFirstTime) {
         if (state.dataHeatBal->AnyEMPD) {
             state.dataHeatBalSurf->MinIterations = DataHeatBalSurface::MinEMPDIterations;
@@ -8103,6 +8110,7 @@ void CalcHeatBalanceInsideSurf(EnergyPlusData &state,
         // Cannot use CalcHeatBalanceInsideSurf2CTFOnly because resimulated zone includes adjacent interzone surfaces
         CalcHeatBalanceInsideSurf2(state, zoneHTSurfList, zoneIZSurfList, zoneHTNonWindowSurfList, zoneHTWindowSurfList, ZoneToResimulate);
     }
+    Perf::addItems(state, Perf::Timer::InsideHB, state.dataHeatBal->InsideSurfIterations);
     CalculateZoneMRT(state, ZoneToResimulate); // Update here so that the proper value of MRT is available to radiant systems
     UpdateIntermediateSurfaceHeatBalanceResults(state, ZoneToResimulate);
 }

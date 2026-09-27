@@ -83,6 +83,7 @@
 #include <EnergyPlus/SystemAvailabilityManager.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::HeatBalanceAirManager {
 // Module containing the air heat balance simulation routines
@@ -137,6 +138,7 @@ constexpr std::array<std::string_view, static_cast<int>(RoomAir::CouplingScheme:
 
 void ManageAirHeatBalance(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::AirHeatBalance);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Richard Liesen

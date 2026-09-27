@@ -106,6 +106,7 @@
 #include <EnergyPlus/WaterUse.hh>
 #include <EnergyPlus/ZonePlenum.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 
@@ -205,6 +206,7 @@ namespace InternalHeatGains {
     void ManageInternalHeatGains(EnergyPlusData &state,
                                  ObjexxFCL::Optional_bool_const InitOnly) // when true, just calls the get input, if appropriate and returns.
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::InternalGains);
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand

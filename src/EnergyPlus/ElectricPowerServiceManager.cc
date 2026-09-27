@@ -85,6 +85,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WindTurbine.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #ifdef DEBUG_ARITHM_GCC_OR_CLANG
 #    include <EnergyPlus/fenv_missing.h>
 #endif
@@ -115,6 +116,7 @@ void ElectricPowerServiceManager::manageElectricPowerService(
     bool const UpdateMetersOnly // if true then don't resimulate generators, just update meters.
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ElectricService);
     if (getInputFlag_) {
         getPowerManagerInput(state);
         getInputFlag_ = false;

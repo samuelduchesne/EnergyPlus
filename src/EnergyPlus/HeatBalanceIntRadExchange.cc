@@ -72,6 +72,7 @@
 #include <EnergyPlus/Material.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WindowEquivalentLayer.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 
@@ -113,6 +114,7 @@ namespace HeatBalanceIntRadExchange {
                                  [[maybe_unused]] std::string_view const CalledFrom)
 #endif
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::IntRadExchange);
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand

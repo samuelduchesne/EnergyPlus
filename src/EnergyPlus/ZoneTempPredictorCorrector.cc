@@ -103,6 +103,7 @@
 #include <EnergyPlus/WeatherManager.hh>
 #include <EnergyPlus/ZonePlenum.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::ZoneTempPredictorCorrector {
 
@@ -205,6 +206,7 @@ void ManageZoneAirUpdates(EnergyPlusData &state,
                           Real64 const PriorTimeStep         // the old value for timestep length is passed for possible use in interpolating
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ZoneAirUpdates);
 
     // SUBROUTINE INFORMATION
     //       AUTHOR         Russ Taylor

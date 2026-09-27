@@ -81,6 +81,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WeatherManager.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SizingManager {
 
@@ -110,6 +111,7 @@ constexpr std::array<std::string_view, (int)DataSizing::OAFlowCalcMethod::Num> O
 
 void ManageSizing(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::Sizing);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Fred Buhl

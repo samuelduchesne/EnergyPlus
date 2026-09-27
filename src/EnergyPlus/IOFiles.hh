@@ -333,6 +333,7 @@ public:
 
     InputOutputFilePath screenCsv{"eplusscreen.csv"};
     InputOutputFilePath endFile{"eplusout.end"};
+    InputOutputFilePath perf{"eplusout.perf"}; // phase timing summary, written only with --timings
 
     InputFilePath iniFile{"EnergyPlus.ini"};
 

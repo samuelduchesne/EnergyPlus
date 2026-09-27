@@ -45,95 +45,111 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+// C++ Headers
+#include <algorithm>
+#include <format>
+#include <string>
+
 // EnergyPlus Headers
 #include <EnergyPlus/Data/EnergyPlusData.hh>
 #include <EnergyPlus/DataGlobals.hh>
-#include <EnergyPlus/InputProcessing/InputProcessor.hh>
-#include <EnergyPlus/NonZoneEquipmentManager.hh>
-#include <EnergyPlus/WaterThermalTanks.hh>
-#include <EnergyPlus/WaterUse.hh>
+#include <EnergyPlus/DataSystemVariables.hh>
+#include <EnergyPlus/DisplayRoutines.hh>
+#include <EnergyPlus/IOFiles.hh>
+#include <EnergyPlus/Parallel.hh>
 #include <EnergyPlus/PerformanceTimers.hh>
 
-namespace EnergyPlus {
+namespace EnergyPlus::Perf {
 
-namespace NonZoneEquipmentManager {
-
-    // MODULE INFORMATION:
-    //       AUTHOR         Peter Graham Ellis
-    //       DATE WRITTEN   January 2004
-    //       MODIFIED       Hudson, ORNL July 2007
-    //       RE-ENGINEERED  na
-
-    // PURPOSE OF THIS MODULE:
-
-    // METHODOLOGY EMPLOYED: na
-
-    // REFERENCES: na
-    // OTHER NOTES: na
-    // USE STATEMENTS: na
-
-    // Data
-    // MODULE PARAMETER DEFINITIONS: na
-    // MODULE VARIABLE DECLARATIONS: na
-
-    // SUBROUTINE SPECIFICATIONS:
-
-    // MODULE SUBROUTINES:
-
-    // Functions
-
-    void ManageNonZoneEquipment(EnergyPlusData &state,
-                                bool const FirstHVACIteration,
-                                bool &SimNonZoneEquipment // Simulation convergence flag
-    )
+namespace {
+    double secondsBetween(ScopedTimer::Clock::time_point a, ScopedTimer::Clock::time_point b)
     {
-        Perf::ScopedTimer perfTimer(state, Perf::Timer::NonZoneEquipment);
+        return std::chrono::duration<double>(b - a).count();
+    }
+} // namespace
 
-        // SUBROUTINE INFORMATION:
-        //       AUTHOR         Dan Fisher
-        //       DATE WRITTEN   Sept. 2000
-        //       RE-ENGINEERED  Richard Liesen
-        //       DATE MODIFIED  February 2003
-        //       MODIFIED       Hudson, ORNL July 2007
-        //       MODIFIED       B. Griffith, NREL, April 2008,
-        //                      added calls for just heat recovery part of chillers
-        //       MODIFIED       Removed much for plant upgrade, 2011
+ScopedTimer::ScopedTimer(EnergyPlusData &state, Timer t) : state_(state), idx_(static_cast<int>(t)), active_(state.dataSysVars->TimingFlag)
+{
+    if (active_) {
+        state_.dataPerf->childStack.push_back(0.0);
+        start_ = Clock::now();
+    }
+}
 
-        // PURPOSE OF THIS SUBROUTINE:
-        // This routine checks the input file for any non-zone equipment objects and gets their input.
-        // Zone equipment objects are generally triggered to "get input" when they are called for simulation
-        // by the ZoneEquipmentManager because they are referenced by a Zone Equipment List.  In the case of
-        // the NonZoneEquipmentManager, it does not yet have a list of non-zone equipment, so it must make
-        // one here before it knows what to call for simulation.
+ScopedTimer::~ScopedTimer()
+{
+    if (!active_) {
+        return;
+    }
+    double const dur = secondsBetween(start_, Clock::now());
+    auto &d = *state_.dataPerf;
+    double child = 0.0;
+    if (!d.childStack.empty()) {
+        child = d.childStack.back();
+        d.childStack.pop_back();
+    }
+    d.inclusive[idx_] += dur;
+    d.exclusive[idx_] += dur - child;
+    ++d.calls[idx_];
+    if (!d.childStack.empty()) {
+        d.childStack.back() += dur;
+    }
+}
 
-        // Using/Aliasing
-        using WaterThermalTanks::SimulateWaterHeaterStandAlone;
-        using WaterUse::SimulateWaterUse;
+void addItems(EnergyPlusData &state, Timer t, long long n)
+{
+    if (state.dataSysVars->TimingFlag) {
+        state.dataPerf->items[static_cast<int>(t)] += n;
+    }
+}
 
-        // SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-        auto &CountNonZoneEquip = state.dataGlobal->CountNonZoneEquip;
+void writeReport(EnergyPlusData &state)
+{
+    if (!state.dataSysVars->TimingFlag) {
+        return;
+    }
+    auto &d = *state.dataPerf;
+    double const wall = secondsBetween(d.processStart, PerfTimerData::Clock::now());
+    int const threads = state.dataParallel->numThreads;
 
-        if (CountNonZoneEquip) {
-            state.dataGlobal->NumOfWaterHeater = state.dataInputProcessing->inputProcessor->getNumObjectsFound(state, "WaterHeater:Mixed") +
-                                                 state.dataInputProcessing->inputProcessor->getNumObjectsFound(state, "WaterHeater:Stratified");
-            CountNonZoneEquip = false;
+    auto perfFile = state.files.perf.try_open();
+    if (perfFile.good()) {
+        print(perfFile, "{{\n  \"wall_seconds\": {:.6f},\n  \"threads\": {},\n  \"timers\": [\n", wall, threads);
+        for (int i = 0; i < numTimers; ++i) {
+            print(perfFile,
+                  "    {{\"name\": \"{}\", \"inclusive_s\": {:.6f}, \"exclusive_s\": {:.6f}, \"calls\": {}, \"items\": {}}}{}\n",
+                  timerNames[i],
+                  d.inclusive[i],
+                  d.exclusive[i],
+                  d.calls[i],
+                  d.items[i],
+                  (i + 1 < numTimers) ? "," : "");
         }
-
-        SimulateWaterUse(state, FirstHVACIteration); // simulate non-plant loop water use.
-
-        if (!state.dataGlobal->ZoneSizingCalc) {
-            for (int WaterHeaterNum = 1; WaterHeaterNum <= state.dataGlobal->NumOfWaterHeater; ++WaterHeaterNum) {
-                SimulateWaterHeaterStandAlone(state, WaterHeaterNum, FirstHVACIteration);
-            }
-        }
-
-        if (FirstHVACIteration) {
-            SimNonZoneEquipment = true;
-        } else {
-            SimNonZoneEquipment = false;
-        }
+        print(perfFile, "  ]\n}}\n");
+        perfFile.close();
     }
 
-} // namespace NonZoneEquipmentManager
+    // Console summary, largest exclusive time first
+    std::array<int, numTimers> order{};
+    for (int i = 0; i < numTimers; ++i) {
+        order[i] = i;
+    }
+    std::stable_sort(order.begin(), order.end(), [&d](int a, int b) { return d.exclusive[a] > d.exclusive[b]; });
+    DisplayString(state, std::format("Timing summary: wall {:.3f} s, {} thread(s)", wall, threads));
+    DisplayString(state, std::format("  {:<20} {:>10} {:>10} {:>7} {:>10} {:>10}", "phase", "inclusive", "exclusive", "%wall", "calls", "items"));
+    for (int i : order) {
+        if (d.calls[i] == 0) {
+            continue;
+        }
+        DisplayString(state,
+                      std::format("  {:<20} {:>10.3f} {:>10.3f} {:>6.1f}% {:>10} {:>10}",
+                                  timerNames[i],
+                                  d.inclusive[i],
+                                  d.exclusive[i],
+                                  wall > 0.0 ? 100.0 * d.exclusive[i] / wall : 0.0,
+                                  d.calls[i],
+                                  d.items[i]));
+    }
+}
 
-} // namespace EnergyPlus
+} // namespace EnergyPlus::Perf

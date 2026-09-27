@@ -48,6 +48,9 @@
 #ifndef HeatBalanceIntRadExchange_hh_INCLUDED
 #define HeatBalanceIntRadExchange_hh_INCLUDED
 
+// C++ Headers
+#include <vector>
+
 // ObjexxFCL Headers
 #include <ObjexxFCL/Array1S.hh>
 #include <ObjexxFCL/Array2A.hh>
@@ -182,6 +185,18 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
     bool ViewFactorReport = false; // Flag to output view factor report in eio file
     int LargestSurf = 0;
 
+    // Skipping the "Outside" call when it would repeat the "Main" call of the same timestep
+    bool mainCallValid = false;              // true between the full "Main" call and the full "Outside" call of a zone timestep
+    std::vector<int> shadeFlagAtMain;        // SurfWinShadingFlag of every heat transfer window at the "Main" call
+    std::vector<Real64> absThermalIntAtMain; // SurfAbsThermalInt of every heat transfer surface at the "Main" call
+
+    // Parallel radiant exchange: per-thread scratch and cost-balanced enclosure chunks
+    int chunkBoundsThreads = 0;            // thread count the chunk bounds were computed for
+    std::vector<int> enclosureChunkBounds; // numThreads + 1 enclosure boundaries covering all enclosures
+    std::vector<std::vector<Real64>> threadTempRad;
+    std::vector<std::vector<Real64>> threadTempInKto4th;
+    std::vector<std::vector<Real64>> threadEmiss;
+
     void init_constant_state([[maybe_unused]] EnergyPlusData &state) override
     {
     }
@@ -200,6 +215,14 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
         this->SurfaceEmiss.deallocate();
         this->ViewFactorReport = false;
         this->LargestSurf = 0;
+        this->mainCallValid = false;
+        this->shadeFlagAtMain.clear();
+        this->absThermalIntAtMain.clear();
+        this->chunkBoundsThreads = 0;
+        this->enclosureChunkBounds.clear();
+        this->threadTempRad.clear();
+        this->threadTempInKto4th.clear();
+        this->threadEmiss.clear();
     }
 };
 

@@ -114,6 +114,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WaterCoils.hh>
 #include <EnergyPlus/ZonePlenum.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SimAirServingZones {
 
@@ -143,6 +144,7 @@ void ManageAirLoops(EnergyPlusData &state,
                     bool &SimZoneEquipment         // TRUE means zone equipment must be (re) simulated
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::AirLoops);
 
     // SUBROUTINE INFORMATION
     //             AUTHOR:  Russ Taylor, Dan Fisher, Fred Buhl

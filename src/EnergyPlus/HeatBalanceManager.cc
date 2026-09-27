@@ -109,6 +109,7 @@
 #include <EnergyPlus/WindowEquivalentLayer.hh>
 #include <EnergyPlus/WindowManager.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 
@@ -141,6 +142,7 @@ namespace HeatBalanceManager {
 
     void ManageHeatBalance(EnergyPlusData &state)
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::HeatBalance);
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand
@@ -3569,6 +3571,7 @@ namespace HeatBalanceManager {
 
     void ReportHeatBalance(EnergyPlusData &state)
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::ReportHeatBalance);
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand

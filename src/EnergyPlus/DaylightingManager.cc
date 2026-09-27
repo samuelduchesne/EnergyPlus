@@ -95,6 +95,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WindowComplexManager.hh>
 #include <EnergyPlus/WindowManager.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::Dayltg {
 
@@ -5821,6 +5822,7 @@ void initDaylighting(EnergyPlusData &state, bool const initSurfaceHeatBalancefir
 
 void manageDaylighting(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::Daylighting);
     auto &dl = state.dataDayltg;
 
     if (state.dataEnvrn->SunIsUp && (state.dataEnvrn->BeamSolarRad + state.dataEnvrn->GndSolarRad + state.dataEnvrn->DifSolarRad > 0.0)) {

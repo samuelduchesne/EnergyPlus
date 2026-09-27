@@ -79,6 +79,7 @@
 #include <EnergyPlus/SQLiteProcedures.hh>
 #include <EnergyPlus/ScheduleManager.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 // Local Headers
 #include "re2/re2.h"
@@ -3334,6 +3335,7 @@ void SetupOutputVariable(EnergyPlusData &state,
 
 void UpdateDataandReport(EnergyPlusData &state, OutputProcessor::TimeStepType const t_TimeStepTypeKey) // What kind of data to update (Zone, HVAC)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::UpdateDataandReport);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Linda K. Lawrie

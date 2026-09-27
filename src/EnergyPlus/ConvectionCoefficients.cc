@@ -86,6 +86,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/Vectors.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::Convect {
 
@@ -144,6 +145,7 @@ void InitIntConvCoeff(EnergyPlusData &state,
                       ObjexxFCL::Optional_int_const ZoneToResimulate // if passed in, then only calculate surfaces that have this zone
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ConvectionInside);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Rick Strand
@@ -404,6 +406,7 @@ void InitExtConvCoeff(EnergyPlusData &state,
                       Real64 &HSrdSurf                            // Radiation to surrounding surfaces
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ConvectionOutside);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         George Walton

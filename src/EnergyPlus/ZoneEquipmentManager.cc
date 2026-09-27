@@ -116,6 +116,7 @@
 #include <EnergyPlus/ZoneEquipmentManager.hh>
 #include <EnergyPlus/ZonePlenum.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::ZoneEquipmentManager {
 
@@ -147,6 +148,7 @@ void ManageZoneEquipment(EnergyPlusData &state,
                          bool &SimAir   // Eventually set to true via SimZoneEquipment if AirLoop must be resimulated
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::ZoneEquipment);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Russ Taylor

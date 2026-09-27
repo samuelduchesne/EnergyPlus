@@ -466,6 +466,8 @@ set(SRC
     OutputReports.hh
     OutsideEnergySources.cc
     OutsideEnergySources.hh
+    Parallel.cc
+    Parallel.hh
     PVWatts.cc
     PVWatts.hh
     PackagedThermalStorageCoil.cc
@@ -475,6 +477,8 @@ set(SRC
     PhaseChangeModeling/HysteresisModel.cc
     PhaseChangeModeling/HysteresisModel.hh
     PhotovoltaicThermalCollectors.cc
+    PerformanceTimers.cc
+    PerformanceTimers.hh
     PhotovoltaicThermalCollectors.hh
     Photovoltaics.cc
     Photovoltaics.hh

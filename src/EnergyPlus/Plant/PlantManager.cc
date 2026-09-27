@@ -124,6 +124,7 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WaterThermalTanks.hh>
 #include <EnergyPlus/WaterUse.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::PlantManager {
 
@@ -155,6 +156,7 @@ void ManagePlantLoops(EnergyPlusData &state,
                       bool &SimElecCircuits                       // True when electric circuits need to be (re)simulated
 )
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::Plant);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Sankaranarayanan K P

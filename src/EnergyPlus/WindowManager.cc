@@ -78,6 +78,7 @@
 #include <EnergyPlus/WindowManagerExteriorThermal.hh>
 #include <EnergyPlus/WindowModel.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 
@@ -2063,6 +2064,7 @@ namespace Window {
                                Real64 &SurfOutsideTemp     // Outside surface temperature (C)
     )
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::WindowHB);
         // SUBROUTINE INFORMATION:
         //       AUTHOR         S. Vidanovic
         //       DATE WRITTEN   June 2016

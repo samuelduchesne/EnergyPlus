@@ -49,6 +49,7 @@
 #include <format>
 #include <memory>
 #include <string>
+#include <thread>
 
 // ObjexxFCL Headers
 #include <ObjexxFCL/Array.functions.hh>
@@ -207,6 +208,8 @@ extern "C" {
 #include <EnergyPlus/ZoneContaminantPredictorCorrector.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/Parallel.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 namespace EnergyPlus {
 namespace SimulationManager {
 
@@ -239,6 +242,8 @@ namespace SimulationManager {
 
     void ManageSimulation(EnergyPlusData &state)
     {
+        Parallel::initialize(state); // thread pool sized from --threads (default 1)
+
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand
@@ -693,6 +698,8 @@ namespace SimulationManager {
         if (ErrorsFound) {
             ShowFatalError(state, "Error condition occurred.  Previous Severe Errors cause termination.");
         }
+
+        Perf::writeReport(state); // eplusout.perf, only with --timings
     }
 
     void GetProjectData(EnergyPlusData &state)
@@ -1929,6 +1936,12 @@ namespace SimulationManager {
             "Threads, Number of Threads Used (Interior Radiant Exchange), Number Nominal Surfaces, Number "
             "Parallel Sims");
         print(state.files.eio, "{}\n", ThreadingHeader);
+        if (state.dataParallel->numThreads > 1) { // the report is unchanged for a single-threaded run
+            state.dataSysVars->Threading = true;
+            state.dataSysVars->MaxNumberOfThreads = static_cast<int>(std::thread::hardware_concurrency());
+            state.dataSysVars->NumberIntRadThreads = state.dataParallel->numThreads;
+            state.dataSysVars->iNominalTotSurfaces = state.dataSurface->TotSurfaces;
+        }
         static constexpr std::string_view ThreadReport("Program Control Information:Threads/Parallel Sims, {},{}, {}, {}, {}, {}, {}, {}\n");
         if (state.dataSysVars->Threading) {
             if (state.dataSysVars->iEnvSetThreads == 0) {

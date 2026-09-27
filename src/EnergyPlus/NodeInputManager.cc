@@ -66,6 +66,7 @@
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/ScheduleManager.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::Node {
 
@@ -947,6 +948,7 @@ void EndUniqueNodeCheck(EnergyPlusData &state, std::string const &ContextName)
 
 void CalcMoreNodeInfo(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::NodeInfo);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Fred Buhl

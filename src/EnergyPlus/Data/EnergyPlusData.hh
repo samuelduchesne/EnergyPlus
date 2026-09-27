@@ -102,6 +102,8 @@ struct DataInputProcessing;
 struct DataPlantData;
 struct DataStringGlobalsData;
 struct DataTimingsData;
+struct ParallelData;
+struct PerfTimerData;
 struct DataWaterData;
 struct DataZoneControlsData;
 struct DataZoneEnergyDemandsData;
@@ -361,6 +363,8 @@ struct EnergyPlusData : BaseGlobalStruct
     std::unique_ptr<DataPlantData> dataPlnt;
     std::unique_ptr<DataStringGlobalsData> dataStrGlobals;
     std::unique_ptr<DataTimingsData> dataTimingsData;
+    std::unique_ptr<ParallelData> dataParallel;
+    std::unique_ptr<PerfTimerData> dataPerf;
     std::unique_ptr<DataWaterData> dataWaterData;
     std::unique_ptr<DataZoneControlsData> dataZoneCtrls;
     std::unique_ptr<DataZoneEnergyDemandsData> dataZoneEnergyDemand;

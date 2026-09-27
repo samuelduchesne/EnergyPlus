@@ -56,6 +56,7 @@
 #include <EnergyPlus/CommandLineInterface.hh>
 #include <EnergyPlus/Data/EnergyPlusData.hh>
 #include <EnergyPlus/DataStringGlobals.hh>
+#include <EnergyPlus/DataSystemVariables.hh>
 #include <EnergyPlus/DisplayRoutines.hh>
 #include <EnergyPlus/EnergyPlus.hh>
 #include <EnergyPlus/FileSystem.hh>
@@ -152,6 +153,8 @@ Built on Platform: {}
 
         app.add_flag("-r,--readvars", state.dataGlobal->runReadVars, "Run ReadVarsESO after simulation");
 
+        app.add_flag("--timings", state.dataSysVars->TimingFlag, "Write a per-phase wall-clock timing summary to eplusout.perf and the console");
+
         app.add_flag("-c,--convert", state.dataGlobal->outputEpJSONConversion, "Output IDF->epJSON or epJSON->IDF, dependent on input file type");
 
         app.add_flag("--convert-only",
@@ -170,10 +173,11 @@ Built on Platform: {}
 
         // TODO: maybe delay validation to output a better error message?
         const int MAX_N = static_cast<int>(std::thread::hardware_concurrency());
-        app.add_option("-j,--jobs",
+        app.add_option("-j,--jobs,--threads",
                        state.dataGlobal->numThread,
-                       "Multi-thread with N threads; 1 thread with no arg. (Currently only for G-Function generation)")
+                       "Run the simulation with N threads (default 1; also read from ENERGYPLUS_NUM_THREADS). Results do not depend on N.")
             ->option_text("N")
+            ->envname("ENERGYPLUS_NUM_THREADS")
             // ->check(CLI::Range(1, MAX_N)  // Tempted to just do that... much simpler
             // ->check(CLI::Number)
             ->transform([MAX_N, &state](std::string input) -> std::string {
@@ -541,6 +545,7 @@ state.dataStrGlobals->inputFilePath='{:g}',
         state.files.dxf.filePath = composePath(normalSuffix + ".dxf");
         state.files.eio.filePath = composePath(normalSuffix + ".eio");
         state.files.endFile.filePath = composePath(normalSuffix + ".end");
+        state.files.perf.filePath = composePath(normalSuffix + ".perf");
         state.files.outputErrFilePath = composePath(normalSuffix + ".err");
         state.files.eso.filePath = composePath(normalSuffix + ".eso");
 

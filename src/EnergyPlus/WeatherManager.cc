@@ -87,6 +87,7 @@
 #include <EnergyPlus/Vectors.hh>
 #include <EnergyPlus/WaterManager.hh>
 #include <EnergyPlus/WeatherManager.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 
@@ -131,6 +132,7 @@ namespace Weather {
 
     void ManageWeather(EnergyPlusData &state)
     {
+        Perf::ScopedTimer perfTimer(state, Perf::Timer::Weather);
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand

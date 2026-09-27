@@ -272,6 +272,8 @@ EnergyPlusData::EnergyPlusData()
     this->dataTARCOGMain = std::make_unique<TARCOGMainData>();
     this->dataTarcogShading = std::make_unique<TarcogShadingData>();
     this->dataTimingsData = std::make_unique<DataTimingsData>();
+    this->dataParallel = std::make_unique<ParallelData>();
+    this->dataPerf = std::make_unique<PerfTimerData>();
     this->dataTranspiredCollector = std::make_unique<TranspiredCollectorData>();
     this->dataUFADManager = std::make_unique<UFADManagerData>();
     this->dataUnitHeaters = std::make_unique<UnitHeatersData>();
@@ -532,6 +534,8 @@ void EnergyPlusData::clear_state()
     this->dataTARCOGMain->clear_state();
     this->dataTarcogShading->clear_state();
     this->dataTimingsData->clear_state();
+    this->dataParallel->clear_state();
+    this->dataPerf->clear_state();
     this->dataTranspiredCollector->clear_state();
     this->dataUFADManager->clear_state();
     this->dataUnitHeaters->clear_state();
@@ -805,6 +809,8 @@ void EnergyPlusData::init_constant_state(EnergyPlusData &state)
     this->dataTARCOGMain->init_constant_state(state);
     this->dataTarcogShading->init_constant_state(state);
     this->dataTimingsData->init_constant_state(state);
+    this->dataParallel->init_constant_state(state);
+    this->dataPerf->init_constant_state(state);
     this->dataTranspiredCollector->init_constant_state(state);
     this->dataUFADManager->init_constant_state(state);
     this->dataUnitHeaters->init_constant_state(state);
@@ -1070,6 +1076,8 @@ void EnergyPlusData::init_state(EnergyPlusData &state)
     this->dataTARCOGMain->init_state(state);
     this->dataTarcogShading->init_state(state);
     this->dataTimingsData->init_state(state);
+    this->dataParallel->init_state(state);
+    this->dataPerf->init_state(state);
     this->dataTranspiredCollector->init_state(state);
     this->dataUFADManager->init_state(state);
     this->dataUnitHeaters->init_state(state);

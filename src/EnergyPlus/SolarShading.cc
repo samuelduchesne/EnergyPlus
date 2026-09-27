@@ -99,6 +99,7 @@
 #include <EnergyPlus/WindowManagerExteriorData.hh>
 #include <EnergyPlus/WindowModel.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SolarShading {
 
@@ -8969,6 +8970,7 @@ int SurfaceScheduledSolarInc(EnergyPlusData &state,
 
 void PerformSolarCalculations(EnergyPlusData &state)
 {
+    Perf::ScopedTimer perfTimer(state, Perf::Timer::SolarShading);
 
     // SUBROUTINE INFORMATION:
     //       AUTHOR         Linda K. Lawrie
