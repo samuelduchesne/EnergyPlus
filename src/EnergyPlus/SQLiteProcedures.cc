@@ -48,6 +48,7 @@
 // C++ Headers
 #include <ios>
 #include <memory>
+#include <array>
 #include <sstream>
 #include <stdexcept>
 
@@ -1569,7 +1570,9 @@ void SQLite::createSQLiteTimeIndexRecord(OutputProcessor::ReportFreq const repor
     if (m_writeOutputToSQLite) {
         int intervalInMinutes = 60;
 
-        static std::vector<int> lastDayOfMonth = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        // Per call (not static): a static table mutated for a leap year kept February at 29 days for every later
+        // year of this process, including other EnergyPlusData instances and non-leap years of a multi-year run.
+        std::array<int, 12> lastDayOfMonth = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         if (curYearIsLeapYear) {
             lastDayOfMonth[1] = 29;
         }

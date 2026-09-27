@@ -1724,13 +1724,11 @@ namespace WaterUse {
         // PURPOSE OF THIS SUBROUTINE:
         // Calculates the zone internal gains due to water use sensible and latent loads.
 
-        static bool MyEnvrnFlagLocal = true;
-
         if (state.dataWaterUse->numWaterEquipment == 0) {
             return;
         }
 
-        if (state.dataGlobal->BeginEnvrnFlag && MyEnvrnFlagLocal) {
+        if (state.dataGlobal->BeginEnvrnFlag && state.dataWaterUse->MyEnvrnFlagZoneGains) {
             for (auto &e : state.dataWaterUse->WaterEquipment) {
                 e.SensibleRate = 0.0;
                 e.SensibleEnergy = 0.0;
@@ -1747,11 +1745,11 @@ namespace WaterUse {
                 e.ColdMassFlowRate = 0.0;
                 e.HotMassFlowRate = 0.0;
             }
-            MyEnvrnFlagLocal = false;
+            state.dataWaterUse->MyEnvrnFlagZoneGains = false;
         }
 
         if (!state.dataGlobal->BeginEnvrnFlag) {
-            MyEnvrnFlagLocal = true;
+            state.dataWaterUse->MyEnvrnFlagZoneGains = true;
         }
 
         for (int WaterEquipNum = 1; WaterEquipNum <= state.dataWaterUse->numWaterEquipment; ++WaterEquipNum) {

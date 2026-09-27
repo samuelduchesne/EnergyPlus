@@ -254,6 +254,7 @@ struct WaterUseData : BaseGlobalStruct
     bool getWaterUseInputFlag = true;
     bool calcRhoH2O = true;
     bool MyEnvrnFlagLocal = true;
+    bool MyEnvrnFlagZoneGains = true; // CalcWaterUseZoneGains environment reset flag (was a function-static)
     Real64 rhoH2OStd = 1000.0;
     Array1D_bool CheckEquipName;
     EPVector<WaterUse::WaterEquipmentType> WaterEquipment;

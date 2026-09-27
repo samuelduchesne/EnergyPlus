@@ -5396,7 +5396,12 @@ SumHATOutput SpaceHeatBalanceData::calcSumHAT(EnergyPlusData &state, int const z
                 results.sumIntGain += state.dataSurface->SurfWinConvHeatGainToZoneAir(SurfNum);
                 if (thisZone.NoHeatToReturnAir) {
                     results.sumIntGain += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
-                    state.dataSurface->SurfWinHeatGain(SurfNum) += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
+                    // Add the return-air gain to the window heat gain once per window heat balance; this routine is
+                    // called several times per zone timestep (predictor and corrector), so guard against re-adding.
+                    if (!state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum)) {
+                        state.dataSurface->SurfWinHeatGain(SurfNum) += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
+                        state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum) = true;
+                    }
                     if (state.dataSurface->SurfWinHeatGain(SurfNum) >= 0.0) {
                         state.dataSurface->SurfWinHeatGainRep(SurfNum) = state.dataSurface->SurfWinHeatGain(SurfNum);
                         state.dataSurface->SurfWinHeatGainRepEnergy(SurfNum) =

@@ -135,6 +135,7 @@ namespace SurfaceGeometry {
         state.dataSurface->SurfWinConvHeatFlowNatural.dimension(NumSurfaces, 0);
         state.dataSurface->SurfWinConvHeatGainToZoneAir.dimension(NumSurfaces, 0);
         state.dataSurface->SurfWinRetHeatGainToZoneAir.dimension(NumSurfaces, 0);
+        state.dataSurface->SurfWinRetHeatGainAddedToZoneAir.dimension(NumSurfaces, false);
         state.dataSurface->SurfWinDividerHeatGain.dimension(NumSurfaces, 0);
         state.dataSurface->SurfWinBlTsolBmBm.dimension(NumSurfaces, 0);
         state.dataSurface->SurfWinBlTsolBmDif.dimension(NumSurfaces, 0);

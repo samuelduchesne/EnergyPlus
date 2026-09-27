@@ -3534,6 +3534,7 @@ namespace Window {
                     CpAirOutlet = Psychrometrics::PsyCpAirFnW(InletAirHumRat);
                     CpAirZone = Psychrometrics::PsyCpAirFnW(thisZoneHB.airHumRat);
                     s_surf->SurfWinRetHeatGainToZoneAir(SurfNum) = TotAirflowGap * (CpAirOutlet * (TAirflowGapOutletC)-CpAirZone * ZoneTemp);
+                    s_surf->SurfWinRetHeatGainAddedToZoneAir(SurfNum) = false;
                     if (s_surf->SurfWinAirflowDestination(SurfNum) == WindowAirFlowDestination::Indoor) {
                         s_surf->SurfWinHeatGain(SurfNum) += s_surf->SurfWinRetHeatGainToZoneAir(SurfNum);
                     }

@@ -2818,6 +2818,7 @@ void InitSolarHeatGains(EnergyPlusData &state)
                 state.dataSurface->SurfWinConvHeatFlowNatural(SurfNum) = 0.0;
                 state.dataSurface->SurfWinConvHeatGainToZoneAir(SurfNum) = 0.0;
                 state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum) = 0.0;
+                state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum) = false;
                 state.dataSurface->SurfWinDividerHeatGain(SurfNum) = 0.0;
             }
 
@@ -5207,6 +5208,9 @@ void UpdateIntermediateSurfaceHeatBalanceResults(EnergyPlusData &state, ObjexxFC
     }
 
     for (int zoneNum = firstZone; zoneNum <= lastZone; ++zoneNum) {
+        // Recompute the zone total from the surface values every call so that a zone re-simulation
+        // (radiant systems, ZoneToResimulate) does not double count the windows already summed.
+        state.dataHeatBal->ZoneWinHeatGain(zoneNum) = 0.0;
         for (int spaceNum : state.dataHeatBal->Zone(zoneNum).spaceIndexes) {
             auto const &thisSpace = state.dataHeatBal->space(spaceNum);
             int const firstSurf = thisSpace.WindowSurfaceFirst;
@@ -9583,7 +9587,7 @@ void sumSurfQdotRadHVAC(EnergyPlusData &state)
     }
 }
 
-void TestSurfTempCalcHeatBalanceInsideSurf(EnergyPlusData &state, Real64 TH12, int const SurfNum, DataHeatBalance::ZoneData &zone, int WarmupSurfTemp)
+void TestSurfTempCalcHeatBalanceInsideSurf(EnergyPlusData &state, Real64 TH12, int const SurfNum, DataHeatBalance::ZoneData &zone, int &WarmupSurfTemp)
 {
     std::string surfName = state.dataSurface->Surface(SurfNum).Name;
 

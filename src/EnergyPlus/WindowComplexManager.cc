@@ -3352,6 +3352,7 @@ namespace WindowComplexManager {
                         state.dataSurface->SurfWinHeatGain(SurfNum) += ConvHeatGainToZoneAir;
                     } else {
                         state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum) = ConvHeatGainToZoneAir;
+                        state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum) = false;
                     }
                 }
                 // For AirflowDestination = ReturnAir in a controlled (i.e., conditioned) zone with return air, see CalcZoneLeavingConditions

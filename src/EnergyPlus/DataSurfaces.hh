@@ -1701,6 +1701,7 @@ struct SurfacesData : BaseGlobalStruct
     Array1D<Real64> SurfWinConvHeatFlowNatural;     // Convective heat flow from gap between glass and interior shade or blind (W)
     Array1D<Real64> SurfWinConvHeatGainToZoneAir;   // Convective heat gain to zone air from window gap airflow (W)
     Array1D<Real64> SurfWinRetHeatGainToZoneAir;    // Convective heat gain to return air sent to zone [W]
+    Array1D_bool SurfWinRetHeatGainAddedToZoneAir;  // True once SurfWinRetHeatGainToZoneAir has been added to SurfWinHeatGain this step
     Array1D<Real64> SurfWinDividerHeatGain;
     Array1D<Real64> SurfWinBlTsolBmBm;                 // Time-step value of blind beam-beam solar transmittance (-)
     Array1D<Real64> SurfWinBlTsolBmDif;                // Time-step value of blind beam-diffuse solar transmittance (-)

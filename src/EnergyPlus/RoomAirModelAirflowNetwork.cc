@@ -864,7 +864,10 @@ namespace RoomAir {
                         SumIntGain += state.dataSurface->SurfWinConvHeatGainToZoneAir(SurfNum);
                         if (zone.NoHeatToReturnAir) {
                             SumIntGain += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
-                            state.dataSurface->SurfWinHeatGain(SurfNum) += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
+                            if (!state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum)) {
+                                state.dataSurface->SurfWinHeatGain(SurfNum) += state.dataSurface->SurfWinRetHeatGainToZoneAir(SurfNum);
+                                state.dataSurface->SurfWinRetHeatGainAddedToZoneAir(SurfNum) = true;
+                            }
                             if (state.dataSurface->SurfWinHeatGain(SurfNum) >= 0.0) {
                                 state.dataSurface->SurfWinHeatGainRep(SurfNum) = state.dataSurface->SurfWinHeatGain(SurfNum);
                                 state.dataSurface->SurfWinHeatGainRepEnergy(SurfNum) =
