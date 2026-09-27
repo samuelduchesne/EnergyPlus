@@ -5,7 +5,8 @@ Faster multizone / multi-plant simulations on multi-core CPUs
 
  - Original date: 2026-09-27
  - Code base: EnergyPlus 26.2.0 (`e2fd2334`)
- - Status: plan for review; nothing in this document has been implemented yet
+ - Status: plan for review. Phase 0, the first two Phase 1 items and the Phase 2 pilot region are
+   implemented on branch `claude/sleepy-goldberg-bqjqqq`; see section 13, "Implementation log".
 
 ## Summary ##
 
@@ -754,3 +755,113 @@ Collected from `HeatBalanceSurfaceManager.cc`, `HeatBalanceIntRadExchange.cc`,
    transfer), both bundled in `third_party/`.
  - G. Amdahl, "Validity of the single processor approach to achieving large scale computing
    capabilities", 1967.
+
+## 13. Implementation log ##
+
+Everything below is on branch `claude/sleepy-goldberg-bqjqqq`, one commit per item, validated with
+`scripts/dev/perf/bench.py` against a baseline build of `e2fd2334` on the same container (4 vCPU,
+GCC 13.3, `-O3`). "Identical" means byte-identical ESO, MTR, EIO, ERR, RDD and MDD after removing
+the time-stamped version lines. The validation set covers the code paths touched: `5ZoneAirCooled`,
+`1ZoneUncontrolled_Win_ASH55_Thermal_Comfort`, `DaylightingDeviceShelf` (glare shading control),
+`AirflowWindowsAndBetweenGlassBlinds`, `MovableIntInsulationLightsLowE`, `RadLoHydrHeatCoolAuto`
+(zone re-simulation), `EquivalentLayerWindow`, `5ZoneEndUses` (water use), `CarrollMRT-RefBldgLargeOffice`,
+`ZoneCoupledKivaRefBldgMediumOffice` and `45zonevav`.
+
+### 13.1 Phase 0 — bugs (commit "Fix process-global state and repeated window-gain accumulation") ###
+
+The five bugs listed in the summary are fixed: the `WaterUse.cc` static flag, the SQLite leap-year
+static, the by-value warm-up counter, `ZoneWinHeatGain` accumulation on zone re-simulation and the
+`SurfWinHeatGain += SurfWinRetHeatGainToZoneAir` repetition per predictor/corrector call (now guarded
+by a per-window flag reset when the return-air gain is recomputed). Identical on the validation set;
+the last two change results only for models with airflow windows returning to zones without return
+air, or radiant systems re-simulating zones with windows.
+
+### 13.2 Phase 0 — measurement harness (commit "Add phase timers, --threads plumbing and a benchmark runner") ###
+
+ - `Perf::ScopedTimer` in 29 entry points plus the AirflowNetwork calls; inclusive/exclusive seconds,
+   call and item counts; `--timings` (or `TimingFlag`, or `Output:Diagnostics,TimingFlag`) writes
+   `eplusout.perf` and a console table. Off by default; nothing is written to eio or err, so timed
+   runs keep their regression outputs.
+ - `Parallel::ThreadPool` (persistent fork/join pool per `EnergyPlusData`, workers stay hot for
+   50 ms then park; exceptions rethrown on the caller; cost-balanced chunking), created at the start
+   of `ManageSimulation` from `--threads`/`-j`/`ENERGYPLUS_NUM_THREADS`; default 1.
+ - `scripts/dev/perf/bench.py`: medians over repeats, phase timers, byte-identity check across builds
+   and thread counts, CSV/JSON output.
+ - The eio "Threads/Parallel Sims" line reports real counts only when more than one thread is used.
+
+Measured fork/join cost of the pool (standalone micro-benchmark, idle machine): 0.4 µs at 2 threads,
+0.7 µs at 4 threads; a 17 µs region of 130 items runs 1.8× faster at 2 threads and 2.8× at 4. With a
+compiler running on the same 4 vCPUs the same region ran 20–60× *slower* than serial: a spinning
+fork/join pool must never be oversubscribed.
+
+### 13.3 Phase 1 — items 5.3.1 and 5.3.2 ###
+
+Skipping the repeated "Outside" `CalcInteriorRadExchange` (the "Main" call records the shading flags
+and inside thermal absorptances of all heat transfer surfaces; the full "Outside" call is skipped
+when they are unchanged, and a zone re-simulation is never skipped) and removing the per-iteration
+whole-array copies and the per-call heap allocation of the radiation temperature array are both
+identical on the validation set. Design-day wall time, median of 3 (baseline → Phase 1):
+
+| Model | Baseline | Phase 1 | Change |
+|---|---|---|---|
+| `ASHRAE901_OutPatientHealthCare` | 9.03 s | 8.99 s | −0.5% |
+| `HospitalBaseline` | 15.99 s | 15.93 s | −0.4% |
+| `45zonevav` | 2.43 s | 2.32 s | −4.5% |
+
+The saving is one of the 2 + N_iter radiant-exchange calls per timestep, i.e. about a quarter of the
+4.9–5.4% that `CalcInteriorRadExchange` costs, consistent with the numbers above. The array-copy
+item is a prerequisite for the per-space parallel iteration (P4) rather than a serial win.
+
+### 13.4 Phase 2 pilot — region P2 (commit "Run the interior radiant exchange enclosure loop on the thread pool") ###
+
+`CalcInteriorRadExchange` is split into a serial phase (shade/insulation change detection and
+emissivity/ScriptF recompute, which allocates and can warn) and a per-enclosure phase that runs on
+the pool with per-thread scratch. Outputs are byte-identical at 1, 3 and 4 threads, twice each, on
+all validation models. The performance result is negative for this region on its own:
+
+| Model (design day) | Radiant-exchange calls | Serial µs/call | Best threaded µs/call | Wall 1 thread | Wall 4 threads |
+|---|---|---|---|---|---|
+| `HospitalBaseline` (1050 surfaces, 8 surfaces per enclosure) | 35,344 | 19.7 | 20.2 (4) | 16.5 s | 16.8 s |
+| `ASHRAE901_OutPatientHealthCare` (1400 surfaces) | 20,287 | 28.3 | 22.9 (3) | 8.9 s | 9.5 s |
+| `ASHRAE901_ApartmentHighRise` (230 zones) | 15,046 | 14.6 | 15.0 (4) | 11.5 s | 11.8 s |
+| `45zonevav` | 17,325 | 5.5 | serial chosen | 2.6 s | 2.4 s |
+
+Three findings, all of which change the plan for Phases 2 and 3:
+
+1. **The regions are too small.** A whole-building radiant exchange is 5–30 µs; a whole inside-surface
+   heat balance call is only ~170 µs on the hospital (2.0 s over 11,800 timesteps), and a whole
+   timestep is ~1.4 ms. Fork/join at 0.7 µs is not the problem; cold caches are. Workers that did
+   not run the preceding serial code must pull every `Surface`, `Construct` and `ScriptF` row from
+   another core's cache, which for an 8-surface enclosure costs more than the 64 multiply-adds it
+   saves. Only the OutPatient model (larger enclosures) showed a gain (28 → 21 µs with 3 threads,
+   2.1× in isolated samples).
+2. **Kept-hot workers cost the main thread 2–3%.** With `--threads 4` on a 4-vCPU VM, wall time
+   rose 2–6% even when the exchange ran serially, because the spinning workers compete with the main
+   thread for the host's execution resources. Between timesteps the HVAC phase is only ~0.6 ms, so
+   a block time short enough to park the workers (1 ms) makes every timestep pay a 15–45 µs wake-up
+   instead. Recommendation: `--threads` ≤ physical cores − 1 on shared machines, and the default
+   stays 1 until Phase 3 regions exist.
+3. **Adaptive scheduling is necessary.** The code times the first 64 full calls alternately serial and
+   parallel, keeps the faster variant for 4096 calls, then re-compares. With this the radiant-exchange
+   timer is never more than noise above serial at any thread count, and results are unaffected
+   (scheduling only). The early decision was wrong for the hospital (sizing-period samples chose
+   parallel; the run as a whole was slower) until the periodic re-comparison was added.
+
+**Revised plan.** Region P2 stays as the pilot and as the mechanism for very large enclosures, but
+Phase 3 should not add P3–P9 one region at a time. The unit of parallel work has to be one *space
+(or enclosure group) for the whole envelope step* — outside balance, radiant exchange, window
+balance, convection and inside iteration kernel for the same surfaces on the same thread — so that
+each thread works on data it just touched and a timestep issues a handful of ~100 µs regions rather
+than dozens of 10 µs ones. That is the P4 design in section 4.1 with P2, P3, P5 and P6 fused into
+it, and it needs the shared-state hardening of section 5.2 first (windows: `dataWindowManager`,
+TARCOG; convection: one-time input fetches). The Phase 2 exit criterion "P2 shows ≥3× on the
+radiant-exchange timer at 4 threads" is withdrawn as unrealistic for 8-surface enclosures; the
+Phase 3 criterion (envelope timers ≥0.6× linear to 8 threads) stands but is to be measured on the
+fused kernel.
+
+### 13.5 Not yet done ###
+
+Items 5.3.3–5.3.11 (Phase 1), the hardening table (5.2), regions P3–P14, the HVAC iteration work
+(Phase 4) and the nightly CI job. The next step with the best value/risk is 5.3.9b/9a (water-coil
+controller and sizing copies, 10–11.5% of the hospital profiles) followed by the reporting items
+(5.3.7).
