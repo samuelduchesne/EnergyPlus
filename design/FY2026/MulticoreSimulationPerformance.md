@@ -143,47 +143,58 @@ those two rows relative to an annual run; the annual 15-zone profile is the stea
 
 | Function (inclusive) | 45zonevav, design days | HospitalBaseline, design days | 15zonevav, annual |
 |---|---|---|---|
-| `ManageSimulation` | 88.8% | 96.6% | _pending_ |
-| `ManageSurfaceHeatBalance` minus the nested `ManageAirHeatBalance` (envelope) | 32.5% | 32.8% | _pending_ |
-| ├ `CalcHeatBalanceInsideSurf` (iterative inside balance) | 16.0% | 13.9% | _pending_ |
-| ├ `InitSurfaceHeatBalance` (rad exchange "Main", solar, daylighting init, convection) | 12.4% | 13.7% | _pending_ |
-| ├ `CalcInteriorRadExchange` (all call sites) | 7.3% | 7.5% | _pending_ |
-| ├ `CalcHeatBalanceOutsideSurf` | — | 3.0% | _pending_ |
-| ├ `CalcWindowHeatBalance` | — | 2.6% | _pending_ |
-| `ManageHVAC` | 30.8% | 42.3% | _pending_ |
-| ├ `SimZoneEquipment` (VAV terminals → reheat coils → `ControlCompOutput`) | 20.7% | 25.6% | _pending_ |
-| │ └ `SimulateWaterCoilComponents` | 14.2% | 24.1% | _pending_ |
-| │   └ `ControlCompOutput` (interval-halving controller) | 10.0% | 11.5% | _pending_ |
-| ├ `ManagePlantLoops` | 5.7% | 11.2% | _pending_ |
-| ├ `SimAirLoops` | — | 7.8% | _pending_ |
-| ├ `ManageZoneAirUpdates` (predictor/corrector) | — | 3.5% | _pending_ |
-| `PerformSolarCalculations` incl. `CalcDayltgCoefficients` | 12.0% | — | _pending_ |
-| `ManageSizing` (design-day runs only) | 27.7% | 25.3% | n/a |
-| Input processing (`processInput`, JSON/valijson) | 5.4% + 5.7% | 3.4% | n/a |
-| **Exclusive:** `CalcInteriorRadExchange` | 5.2% | 5.4% | _pending_ |
-| **Exclusive:** `pow`/`exp`/`sincos` (libm) | 8.7% | 7.2% | _pending_ |
-| **Exclusive:** `malloc`/`free` family | 4.9% | 8.1% | _pending_ |
-| **Exclusive:** `ObjexxFCL::Array<double>` copy constructor | 1.6% | 4.0% | _pending_ |
-| **Exclusive:** `memset` | 3.7% | 2.9% | _pending_ |
-| **Exclusive:** `__dynamic_cast` | 1.1% | 1.0% | _pending_ |
+| `ManageSimulation` | 88.8% | 96.6% | 98.2% |
+| `ManageSurfaceHeatBalance` minus the nested `ManageAirHeatBalance` (envelope) | 32.5% | 32.8% | 31.8% |
+| ├ `CalcHeatBalanceInsideSurf` (iterative inside balance) | 16.0% | 13.9% | 16.0% |
+| ├ `InitSurfaceHeatBalance` (rad exchange "Main", solar, daylighting init, convection) | 12.4% | 13.7% | 10.9% |
+| ├ `CalcInteriorRadExchange` (all call sites) | 7.3% | 7.5% | 6.1% |
+| ├ `CalcWindowHeatBalance` | — | 2.6% | 6.0% |
+| ├ `CalcHeatBalanceOutsideSurf` | — | 3.0% | 2.1% |
+| `ManageHVAC` | 30.8% | 42.3% | 53.4% |
+| ├ `SimZoneEquipment` (VAV terminals → reheat coils → `ControlCompOutput`) | 20.7% | 25.6% | 18.1% |
+| │ └ `SimulateWaterCoilComponents` | 14.2% | 24.1% | 10.2% |
+| │   └ `ControlCompOutput` (interval-halving controller) | 10.0% | 11.5% | 10.2% |
+| ├ `ManagePlantLoops` (2 plant + 1 condenser loop in the 15-zone file) | 5.7% | 11.2% | 17.2% |
+| ├ `SimAirLoops` | — | 7.8% | 3.5% |
+| ├ `ManageZoneAirUpdates` (predictor/corrector) | — | 3.5% | 3.8% |
+| ├ `CalcMoreNodeInfo` (per-node psychrometric report values, every system timestep) | — | — | 3.8% |
+| ├ `manageElectricPowerService` (7 meter scans × 2 per iteration) | — | — | 2.5% |
+| `ReportHeatBalance` (`UpdateDataandReport` 3.9%, tabular/monthly gathering 3.5%) | — | — | 7.5% |
+| `ReportZoneMeanAirTemp` | — | — | 2.1% |
+| `PerformSolarCalculations` incl. `CalcDayltgCoefficients` | 12.0% | — | 1.8% |
+| `ManageSizing` (design-day runs only) | 27.7% | 25.3% | 1.8% |
+| Input processing (`processInput`, JSON/valijson) | 5.4% + 5.7% | 3.4% | ~2.5% |
+| **Exclusive:** `CalcInteriorRadExchange` | 5.2% | 5.4% | 4.9% |
+| **Exclusive:** `pow`/`exp`/`log`/`sincos` (libm) | 8.7% | 7.2% | 8.8% |
+| **Exclusive:** `__dynamic_cast` | 1.1% | 1.0% | 3.5% |
+| **Exclusive:** `CalcHeatBalanceInsideSurf2CTFOnly` (the kernel itself) | 3.3% | 3.1% | 3.0% |
+| **Exclusive:** `PsyTsatFnPb_raw` + `PsyPsatFnTemp_raw` (cache misses) | — | — | 5.8% incl. / 1.0% excl. |
+| **Exclusive:** `malloc`/`free` family | 4.9% | 8.1% | < 1% |
+| **Exclusive:** `ObjexxFCL::Array<double>` copy constructor | 1.6% | 4.0% | < 0.5% |
+| **Exclusive:** `memset` | 3.7% | 2.9% | 1.3% |
 
 ### 2.3 Profile-driven hot spots ###
 
-1. **The inside-surface iteration and long-wave exchange are the envelope cost.** Together
-   `CalcHeatBalanceInsideSurf` and `CalcInteriorRadExchange` are ~20% of a design-day run
-   on both models, and `CalcInteriorRadExchange` is the single largest *exclusive* function
-   (5.2–5.4%). It is called 2 + N_iter times per zone timestep (section 4.2). Both are the
-   prime parallel targets (regions P2 and P4) and both carry easy serial waste (duplicate
-   "Outside" call, whole-array copies and zeroing every iteration).
-2. **Zone equipment dominates HVAC, through water-coil reheat control.** On the hospital,
-   26% of all instructions are in `SimZoneEquipment`, almost all of it in VAV reheat
-   terminals → `SimulateWaterCoilComponents` (24%) → `ControlCompOutput` (11.5%), the
+1. **The envelope is a steady third of the work; the inside-surface iteration and long-wave
+   exchange are most of it.** The envelope share is 32–33% on all three profiles.
+   `CalcHeatBalanceInsideSurf` alone is 16% of the annual run, `CalcInteriorRadExchange`
+   6% (and the single largest *exclusive* function at 4.9–5.4%), and the window heat
+   balance 6% (`SolveForWindowTemperatures` 4.1%, a 100-iteration Newton solve per window
+   per timestep). `CalcInteriorRadExchange` is called 2 + N_iter times per zone timestep
+   (section 4.2). These are the prime parallel targets (regions P2, P4, P5) and they carry
+   easy serial waste (duplicate "Outside" call, whole-array copies and zeroing every
+   iteration).
+2. **HVAC is half of an annual run, and zone equipment leads it through water-coil reheat
+   control.** `ManageHVAC` is 53% of the annual 15-zone run and 42% of the hospital
+   design days. `SimZoneEquipment` (18–26%) is almost entirely VAV reheat terminals →
+   `SimulateWaterCoilComponents` → `ControlCompOutput` (10–11.5% on every profile), the
    interval-halving controller that re-simulates the coil up to 25 times per terminal per
    call. Zones are independent here (region P12), and a direct or secant coil solution
    ("Use Coil Direct Solutions" only covers DX coils today) would remove most of those
-   evaluations serially.
-3. **Plant is 11% on the hospital and its sweeps are mostly forced, not converged.** The
-   iteration-count output variables (annual runs, `detailed` frequency) show:
+   evaluations serially (5.3 item 9b).
+3. **Plant is 17% of the annual run on a model with only two plant loops and one condenser
+   loop, 11% on the hospital design days, and its sweeps are mostly forced, not converged.**
+   The iteration-count output variables (annual runs, `detailed` frequency) show:
 
    | | 45zonevav (2 loops + 1 condenser) | ASHRAE 90.1 Hospital (6 + 1) |
    |---|---|---|
@@ -199,20 +210,31 @@ those two rows relative to an annual run; the annual 15-zone profile is the stea
    timesteps regardless of load, which is what forced minimum sweeps on each of the ~3
    `ManagePlantLoops` calls per `SimHVAC` produce. This is item 4 of section 4.6, and it is
    why plant-cluster parallelism (P13) *and* a convergence-based sweep count both matter.
-4. **Allocation and copying are 8–12% of instructions.** `malloc`/`free`, the `ObjexxFCL`
-   array copy constructor and `memset` together account for 10% (45-zone) to 15%
-   (hospital) of exclusive cost: per-call `Array1D` temporaries in the inside balance
-   and `CalcScriptF`, `BaseSizer::initializeWithinEP` copying entire `ZoneSizingData`
-   structs (10% of the hospital design-day run by itself), and the whole-array zeroing in
-   the radiant exchange. These are bit-identical serial fixes (5.3).
-5. **libm is 7–9%.** `pow`, `exp` and `sincos` come from psychrometrics, the T⁴ terms in
-   radiant exchange and solar geometry. Vectorised or fused evaluation and the psychrometric
-   cache redesign in 5.2 address this; it is also the part that benefits from `-march`.
-6. **Downstepping is common.** The 45-zone VAV run logs 58,565 system timesteps for
+4. **Reporting is ~13% of the annual run, and it is serial.** `ReportHeatBalance` (7.5%:
+   `UpdateDataandReport` 3.9% plus tabular/monthly gathering 3.5%), `CalcMoreNodeInfo`
+   (3.8%: psychrometric report values for every node at every system timestep, whether
+   or not anything reports them) and `ReportZoneMeanAirTemp` (2.1%). `__dynamic_cast` is
+   3.5% of all instructions on its own — one cast per output variable per
+   `UpdateDataandReport` call (5.2, reporting row). This is the Amdahl residue that the
+   asynchronous writer (P14) and the serial reporting fixes (5.3 item 7) exist for.
+5. **Psychrometric cache misses are visible.** `PsyTsatFnPb_raw` and `PsyPsatFnTemp_raw`
+   are 5.8% of the annual run inclusive: the hashed caches (~96 MiB per instance) are
+   missing often enough that the raw iterative solves dominate. Cache design, not just
+   thread safety, is on the table in 5.2.
+6. **libm is 7–9%.** `pow`, `exp`, `log` and `sincos` come from psychrometrics, the T⁴ terms
+   in radiant exchange, glycol property fits and solar geometry. Vectorised or fused
+   evaluation and the psychrometric cache redesign in 5.2 address this; it is also the part
+   that benefits from `-march`.
+7. **Allocation and copying are a sizing-phase problem.** On the design-day profiles
+   `malloc`/`free`, the `ObjexxFCL` array copy constructor and `memset` are 10–15% of
+   exclusive cost, driven by `BaseSizer::initializeWithinEP` copying entire `ZoneSizingData`
+   structs (10% of the hospital design-day run by itself), `CalcScriptF`'s per-call `N×N`
+   matrices and the whole-array zeroing in the radiant exchange. In the annual run they fall
+   below 2%. Fixes are bit-identical (5.3) and matter most for sizing-heavy workflows
+   (design-day-only runs, sizing iteration in optimisation loops).
+8. **Downstepping is common.** The 45-zone VAV run logs 58,565 system timesteps for
    33,614 zone timesteps (1.74 per zone timestep); every downstepped zone timestep repeats
    `SimHVAC` for each sub-step and discards the full-step solve (section 4.6 item 3).
-7. **`__dynamic_cast` shows up at all** (1%): that is `UpdateDataandReport` casting every
-   output variable on every call (5.2, reporting row).
 
 These numbers are reproduced by `scripts/dev/perf/bench.sh` (Phase 0 deliverable); the
 benchmark set is section 7.1.
@@ -470,8 +492,10 @@ Ordered by expected value / risk; each gets its own PR and benchmark row.
    (`DaylightingManager.cc:5953-5956`).
 6. `ComputeDifSolExcZonesWIZWindows` O(N_encl⁵) → sparse traversal (4.3).
 7. Reporting: replace `dynamic_cast<OutVarReal*>` per variable with a typed pointer or
-   `std::variant`; write ESO/MTR values with `dtoa` straight into a buffer instead of a
-   `std::format` temporary; batch `ResultsFramework` map lookups.
+   `std::variant` (3.5% of the annual run); write ESO/MTR values with `dtoa` straight into
+   a buffer instead of a `std::format` temporary; batch `ResultsFramework` map lookups;
+   compute `CalcMoreNodeInfo` (`NodeInputManager.cc`, 3.8%) only for nodes whose report
+   variables are requested or metered, and only at the reporting frequency.
 8. Electric service: cache the 7 facility-meter sums per iteration instead of scanning all
    meter sources twice per iteration.
 9. `UpdateZoneInletConvergenceLog` only when `DisplayExtraWarnings` or the not-converged
