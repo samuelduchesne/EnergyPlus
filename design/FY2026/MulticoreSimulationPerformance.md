@@ -800,31 +800,54 @@ Skipping the repeated "Outside" `CalcInteriorRadExchange` (the "Main" call recor
 and inside thermal absorptances of all heat transfer surfaces; the full "Outside" call is skipped
 when they are unchanged, and a zone re-simulation is never skipped) and removing the per-iteration
 whole-array copies and the per-call heap allocation of the radiation temperature array are both
-identical on the validation set. Design-day wall time, median of 3 (baseline → Phase 1):
+identical on the validation set. Wall time, baseline → all commits of this log at `--threads 1`
+(annual: median of 2; design day: median of 3):
 
-| Model | Baseline | Phase 1 | Change |
-|---|---|---|---|
-| `ASHRAE901_OutPatientHealthCare` | 9.03 s | 8.99 s | −0.5% |
-| `HospitalBaseline` | 15.99 s | 15.93 s | −0.4% |
-| `45zonevav` | 2.43 s | 2.32 s | −4.5% |
+| Model | Annual baseline | Annual now | Change | Design day baseline | Design day now |
+|---|---|---|---|---|---|
+| `ASHRAE901_OutPatientHealthCare` | 147.0 s | 144.3 s | −1.8% | 9.03 s | 8.99 s |
+| `HospitalBaseline` | 178.2 s | 176.7 s | −0.8% | 15.99 s | 15.93 s |
+| `45zonevav` | 33.8 s | 33.9 s | +0.2% (noise) | 2.43 s | 2.32 s |
 
 The saving is one of the 2 + N_iter radiant-exchange calls per timestep, i.e. about a quarter of the
 4.9–5.4% that `CalcInteriorRadExchange` costs, consistent with the numbers above. The array-copy
 item is a prerequisite for the per-space parallel iteration (P4) rather than a serial win.
+
+The annual phase timers of the final build (1 thread) put numbers on section 2.3 for these models:
+
+| Timer (inclusive s) | OutPatient (152.9 s) | HospitalBaseline (178.1 s) | 45zonevav (34.6 s) |
+|---|---|---|---|
+| HVAC (system timestep loop) | 66.1 | 100.3 | 15.8 |
+| ZoneEquipment | 20.9 | 42.4 | 6.4 |
+| Plant | 5.6 | 21.9 | 3.0 |
+| AirLoops | 6.7 | 12.7 | 1.1 |
+| InsideHB (incl. windows, radiant exchange) | 20.4 | 20.6 | 5.7 |
+| IntRadExchange | 9.0 (295,802 calls) | 6.5 (340,393 calls) | 1.4 (241,583 calls) |
+| WindowHB | 3.9 (4.26 M calls) | 6.6 (7.09 M calls) | 2.6 |
+| OutsideHB | 3.0 | 3.6 | 0.7 |
+| ReportHeatBalance | 27.0 | 11.5 | 2.6 |
+| UpdateDataandReport | 12.6 | 9.0 | 1.7 |
+| NodeInfo (CalcMoreNodeInfo) | 1.7 | 5.0 | 0.8 |
+
+`ReportHeatBalance` at 17.6% of the OutPatient run (it has 1400 surfaces and many surface output
+variables) is larger than any single envelope phase and moves reporting up the Phase 1 list.
 
 ### 13.4 Phase 2 pilot — region P2 (commit "Run the interior radiant exchange enclosure loop on the thread pool") ###
 
 `CalcInteriorRadExchange` is split into a serial phase (shade/insulation change detection and
 emissivity/ScriptF recompute, which allocates and can warn) and a per-enclosure phase that runs on
 the pool with per-thread scratch. Outputs are byte-identical at 1, 3 and 4 threads, twice each, on
-all validation models. The performance result is negative for this region on its own:
+all validation models, and on the annual runs below. The performance result is negative for this
+region on its own:
 
-| Model (design day) | Radiant-exchange calls | Serial µs/call | Best threaded µs/call | Wall 1 thread | Wall 4 threads |
-|---|---|---|---|---|---|
-| `HospitalBaseline` (1050 surfaces, 8 surfaces per enclosure) | 35,344 | 19.7 | 20.2 (4) | 16.5 s | 16.8 s |
-| `ASHRAE901_OutPatientHealthCare` (1400 surfaces) | 20,287 | 28.3 | 22.9 (3) | 8.9 s | 9.5 s |
-| `ASHRAE901_ApartmentHighRise` (230 zones) | 15,046 | 14.6 | 15.0 (4) | 11.5 s | 11.8 s |
-| `45zonevav` | 17,325 | 5.5 | serial chosen | 2.6 s | 2.4 s |
+| Model, annual, 1 → 3 threads | Radiant-exchange calls | Serial µs/call | Parallel µs/call (3) | Variant chosen | Radiant timer | Wall |
+|---|---|---|---|---|---|---|
+| `HospitalBaseline` (1050 surfaces, ~8 per enclosure) | 340,393 | 22.6 | 37.2 | serial 69 of 81 comparisons | 6.45 → 7.06 s | 178.1 → 179.5 s |
+| `ASHRAE901_OutPatientHealthCare` (1400 surfaces) | 295,802 | 34.0 | 21.2 | parallel 61 of 70 | 8.99 → 7.41 s | 152.9 → 146.9 s (−3.9%) |
+| `45zonevav` | 241,583 | 7.7 | 18.7 | serial 58 of 58 | 1.38 → 1.48 s | 34.6 → 34.9 s |
+
+Design-day runs (1 → 4 threads) told the same story: HospitalBaseline 16.5 → 16.8 s, OutPatient
+8.9 → 9.5 s, `ASHRAE901_ApartmentHighRise` 11.5 → 11.8 s.
 
 Three findings, all of which change the plan for Phases 2 and 3:
 
@@ -865,3 +888,85 @@ Items 5.3.3–5.3.11 (Phase 1), the hardening table (5.2), regions P3–P14, the
 (Phase 4) and the nightly CI job. The next step with the best value/risk is 5.3.9b/9a (water-coil
 controller and sizing copies, 10–11.5% of the hospital profiles) followed by the reporting items
 (5.3.7).
+
+## 14. Reassessment: what can make a run an order of magnitude faster ##
+
+The measurements above change the emphasis of this plan. An annual run is a chain of 35,000 to
+100,000 timesteps of about 1.4 ms each on a 1,000-surface hospital (0.5 ms envelope, 0.6 ms HVAC,
+the rest reporting). No phase is compute-bound: the whole-building radiant exchange is 8,000
+multiply-adds in 20 µs, about 1% of one core's arithmetic peak. The time is spent in latency
+(indirect array lookups per surface and node, psychrometric cache probes, `dynamic_cast` per
+output variable). Splitting 10–30 µs latency-bound regions across cores makes them slower, as the
+pilot showed, and even the fused envelope kernel of section 13.4 is a 1.2× whole-run story.
+Three tiers follow, distinguished by what "same results" means.
+
+### 14.1 Tier A — same results as EnergyPlus already defines them: time-parallel run periods ###
+
+Every run period starts with warm-up days that repeat the first day until the state forgets its
+initial condition, to the tolerances of the `Building` object (defaults 0.4 K on zone temperature,
+4% on loads). Every annual result relies on that definition. It allows the run period to be split
+into K chunks (months or weeks), each run as its own process from a generated input with the
+chunk's `RunPeriod`, the model's own warm-up settings, and an overlap of a few real days with the
+previous chunk. The overlap is the correctness instrument: zone temperatures and meters on the
+overlapping days are compared with the previous chunk, the maximum deviation is reported, and the
+warm-up is extended and the chunk rerun when it exceeds the warm-up tolerance. That is a stronger
+statement than today's, where nobody checks that warm-up converged for the first day of the run
+period.
+
+From the annual measurements on `HospitalBaseline` (178 s, about 16 s of it sizing and
+initialisation, 0.45 s per simulated day):
+
+| Chunks | Cores | Time per chunk (sizing + 7 warm-up days + chunk) | Speedup |
+|---|---|---|---|
+| 3 × 4 months | 4 | 16 + 3.2 + 55 = 74 s | 2.4× |
+| 12 months | 12 | 16 + 3.2 + 14 = 33 s | 5.4× |
+| 52 weeks | 52 | 16 + 3.2 + 3.2 = 22 s | 8× |
+
+Sizing is redone identically in every chunk and becomes the floor; sizing periods are independent
+environments and can run concurrently, which moves the floor toward 10 s and the weekly case past
+10×. None of this needs threads in the C++: an orchestrator, a `RunPeriod` rewriter, and output
+merging (ESO/MTR concatenation, meter sums, SQLite merge, and the annual tabular reports rebuilt
+from merged meter data, which is the one substantial piece).
+
+Detected from the input, and either refused or run serially: components with seasonal memory
+(ground heat exchangers with g-function load history, borefields, seasonal storage), EMS or Python
+plugins with persistent state or long trend windows, demand limiting on billing periods that do not
+align with chunk boundaries. Daily-cycle storage (ice, water heaters, PCM) reconverges within
+warm-up as thermal mass does. Multi-year runs and `RunPeriod` objects with actual weather years are
+chunked per year first.
+
+### 14.2 Tier B — bit-identical: make each timestep cheap ###
+
+ - Reporting on a second thread (13–18% of an annual run): snapshot values in fixed order on the
+   main thread, format and write on the writer thread. Same bytes, same order.
+ - Exact memoisation of HVAC components: within one HVAC iteration, air loops and zone equipment
+   are re-simulated because a flag was raised elsewhere, and most components see identical inlet
+   nodes, control signals and schedules. A component that is a pure function of its inputs returns
+   the cached result. Enumerating the implicit inputs ("current object" globals) is the same
+   hardening that threading needs.
+ - Envelope data layout: per-surface kernel descriptors (temperature source, emissivity, CTF
+   terms) so the inside iteration is a tight loop over contiguous arrays instead of several
+   indirections per surface. This is what the radiant-exchange pilot was really pointing at.
+ - Psychrometrics without cache probes in hot paths (bit-identical only where the cache is exact
+   today; needs the equivalence check of section 5.2).
+ - LTO, PGO on the benchmark set, `-march` with contraction off (section 5.3.11).
+
+### 14.3 Tier C — same equations and tolerances, different solver path ###
+
+Warm starts of the HVAC solution across system timesteps, convergence-based plant sweeps, and a
+direct solution for the simple heating coil (section 4.6, Phase 4). Measured on the hospital
+models: quantised load-independent plant sweep counts, 1.17–1.74 system timesteps per zone
+timestep with the full-step solve discarded on every downstep, controllers cold-started every
+system timestep, up to 25 coil evaluations per terminal per call. Estimated 1.5–2× on the HVAC
+half; differences at the tolerance level, behind `PerformancePrecisionTradeoffs` fields.
+
+### 14.4 Revised order of work ###
+
+1. Tier A orchestrator with overlap validation, prototyped against the existing binary on
+   `HospitalBaseline` and `ASHRAE901_OutPatientHealthCare`; the overlap deviations decide whether
+   the warm-up argument holds for those models before any merging code is written.
+2. Tier B reporting thread and envelope data layout, which compound with Tier A and never risk a
+   result.
+3. Tier C behind input options.
+4. In-process fork/join threading only where it has a region worth its cost: the fused per-space
+   envelope kernel (section 13.4) and the reporting thread.
