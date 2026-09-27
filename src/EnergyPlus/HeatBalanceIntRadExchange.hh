@@ -77,6 +77,15 @@ namespace HeatBalanceIntRadExchange {
                                  ObjexxFCL::Optional_int_const ZoneToResimulate = _, // if passed in, then only calculate for this zone
                                  std::string_view CalledFrom = "");
 
+    // Records the inputs of the full "Main" call of CalcInteriorRadExchange that can change before the
+    // "Outside" call of the same zone timestep (window shading state, inside thermal absorptance).
+    void RecordMainCallState(EnergyPlusData &state);
+
+    // True when the full "Outside" call would recompute exactly what the "Main" call of this zone timestep
+    // computed (same surface temperatures, no shading or emissivity change since). Consumes the record, so a
+    // second "Outside" call without a new "Main" call is never skipped.
+    bool OutsideCallRepeatsMainCall(EnergyPlusData &state);
+
     void UpdateMovableInsulationFlag(EnergyPlusData &state,
                                      bool &MovableInsulationChange, // set to true if there is a change in the movable insulation state
                                      int const SurfNum              // surface number of surface being investigated

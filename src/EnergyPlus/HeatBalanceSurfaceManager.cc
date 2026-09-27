@@ -511,6 +511,7 @@ void InitSurfaceHeatBalance(EnergyPlusData &state)
 
     HeatBalanceIntRadExchange::CalcInteriorRadExchange(
         state, state.dataHeatBalSurf->SurfInsideTempHist(1), 0, state.dataHeatBalSurf->SurfQdotRadNetLWInPerArea, _, "Main");
+    HeatBalanceIntRadExchange::RecordMainCallState(state);
 
     if (state.dataSurface->AirflowWindows) {
         SolarShading::WindowGapAirflowControl(state);
@@ -7342,7 +7343,9 @@ void CalcHeatBalanceOutsideSurf(EnergyPlusData &state,
     if (present(ZoneToResimulate)) {
         HeatBalanceIntRadExchange::CalcInteriorRadExchange(
             state, state.dataHeatBalSurf->SurfInsideTempHist(1), 0, state.dataHeatBalSurf->SurfQdotRadNetLWInPerArea, ZoneToResimulate, Outside);
-    } else {
+    } else if (!HeatBalanceIntRadExchange::OutsideCallRepeatsMainCall(state)) {
+        // The "Main" call in InitSurfaceHeatBalance computed this exchange from the same surface temperatures a
+        // moment ago; it is repeated here only when a shading or emissivity state changed since (daylighting).
         HeatBalanceIntRadExchange::CalcInteriorRadExchange(
             state, state.dataHeatBalSurf->SurfInsideTempHist(1), 0, state.dataHeatBalSurf->SurfQdotRadNetLWInPerArea, _, Outside);
     }

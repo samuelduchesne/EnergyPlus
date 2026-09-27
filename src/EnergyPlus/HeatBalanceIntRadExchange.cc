@@ -427,6 +427,47 @@ namespace HeatBalanceIntRadExchange {
         }
     }
 
+    void RecordMainCallState(EnergyPlusData &state)
+    {
+        // Between the "Main" call (InitSurfaceHeatBalance) and the "Outside" call (CalcHeatBalanceOutsideSurf) of a
+        // zone timestep, nothing changes the surface temperatures passed in (SurfInsideTempHist(1)), the movable
+        // insulation state, the previous-timestep shade flags, the window effective inside temperatures or the
+        // glass face temperatures: those are written before the "Main" call or in the inside heat balance after
+        // the "Outside" call. Daylighting controls (manageDaylighting) run in between and can change
+        // SurfWinShadingFlag, on which the emissivities, the ScriptF recalculation and the choice of window
+        // radiating temperature depend, so the shade flags are recorded here and compared before skipping.
+        // SurfAbsThermalInt is recorded as well as a guard against future writers between the two calls.
+        auto &d = *state.dataHeatBalIntRadExchg;
+        auto const &htSurfs = state.dataSurface->AllHTSurfaceList;
+        d.shadeFlagAtMain.resize(htSurfs.size());
+        d.absThermalIntAtMain.resize(htSurfs.size());
+        for (size_t i = 0; i < htSurfs.size(); ++i) {
+            d.shadeFlagAtMain[i] = static_cast<int>(state.dataSurface->SurfWinShadingFlag(htSurfs[i]));
+            d.absThermalIntAtMain[i] = state.dataHeatBalSurf->SurfAbsThermalInt(htSurfs[i]);
+        }
+        d.mainCallValid = true;
+    }
+
+    bool OutsideCallRepeatsMainCall(EnergyPlusData &state)
+    {
+        auto &d = *state.dataHeatBalIntRadExchg;
+        if (!d.mainCallValid) {
+            return false;
+        }
+        d.mainCallValid = false;
+        auto const &htSurfs = state.dataSurface->AllHTSurfaceList;
+        if (d.shadeFlagAtMain.size() != htSurfs.size() || d.absThermalIntAtMain.size() != htSurfs.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < htSurfs.size(); ++i) {
+            if (d.shadeFlagAtMain[i] != static_cast<int>(state.dataSurface->SurfWinShadingFlag(htSurfs[i])) ||
+                d.absThermalIntAtMain[i] != state.dataHeatBalSurf->SurfAbsThermalInt(htSurfs[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void UpdateMovableInsulationFlag(EnergyPlusData &state, bool &change, int const SurfNum)
     {
 
