@@ -37,7 +37,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_EPW = REPO / "weather" / "USA_IL_Chicago-OHare.Intl.AP.725300_TMY3.epw"
 
-# Files whose content is compared between builds. Files with time stamps or run-dependent text are excluded.
+# Files whose content is compared between builds. Lines carrying the program version or time stamps are ignored.
 COMPARED_OUTPUTS = ["eplusout.eso", "eplusout.mtr", "eplusout.eio", "eplusout.err", "eplusout.rdd", "eplusout.mdd"]
 ERR_LINE_FILTER = re.compile(r"(Elapsed Time|EnergyPlus, Version|YMD=|Program Version|Started at|Simulation Time|\*\*\*\*\*)")
 
@@ -56,7 +56,7 @@ def weather_for(idf: Path) -> Path:
 def file_digest(path: Path) -> str:
     if not path.exists():
         return "missing"
-    if path.name == "eplusout.err":
+    if path.suffix in (".err", ".eio", ".rdd", ".mdd"):
         lines = [ln for ln in path.read_text(errors="replace").splitlines() if not ERR_LINE_FILTER.search(ln)]
         data = "\n".join(lines).encode()
     else:
