@@ -47,6 +47,7 @@
 
 // C++ Headers
 #include <algorithm>
+#include <chrono>
 
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 #include <immintrin.h>
@@ -65,9 +66,14 @@
 namespace EnergyPlus::Parallel {
 
 namespace {
-    // Idle workers spin for about a millisecond, yield for about another millisecond, then park.
-    constexpr int kSpinIterations = 20000;
-    constexpr int kYieldIterations = 1000;
+    // Idle workers stay hot (spinning, then yielding) for kBlockTime after their last region before they park on
+    // the condition variable. Regions inside one timestep are tens of microseconds apart and a parked worker costs
+    // tens of microseconds to wake, so a region that is itself only tens of microseconds long only pays off while
+    // the workers are hot. 50 ms covers the HVAC phase of a timestep for typical models; the cost is that idle
+    // workers occupy their cores for that long after the last parallel region.
+    constexpr auto kBlockTime = std::chrono::milliseconds(50);
+    constexpr int kSpinsPerClockCheck = 256;
+    constexpr int kCallerSpinIterations = 100000;
 } // namespace
 
 ThreadPool::ThreadPool(int numThreads) : numThreads_(std::max(1, numThreads))
@@ -97,17 +103,19 @@ void ThreadPool::workerLoop(int tid)
     std::uint64_t seen = 0;
     for (;;) {
         std::uint64_t g = generation_.load(std::memory_order_seq_cst);
+        auto const idleStart = std::chrono::steady_clock::now();
+        bool hot = true;
         int spins = 0;
         while (g == seen) {
             if (stop_.load(std::memory_order_relaxed)) {
                 return;
             }
-            if (spins < kSpinIterations) {
+            if (hot) {
                 EP_CPU_RELAX();
-                ++spins;
-            } else if (spins < kSpinIterations + kYieldIterations) {
-                std::this_thread::yield();
-                ++spins;
+                if (++spins == kSpinsPerClockCheck) {
+                    spins = 0;
+                    hot = (std::chrono::steady_clock::now() - idleStart) < kBlockTime;
+                }
             } else {
                 std::unique_lock<std::mutex> lock(mutex_);
                 parked_.fetch_add(1, std::memory_order_seq_cst);
@@ -149,7 +157,7 @@ void ThreadPool::dispatch(Thunk thunk, void *ctx)
     }
     int spins = 0;
     while (remaining_.load(std::memory_order_acquire) > 0) {
-        if (spins < kSpinIterations) {
+        if (spins < kCallerSpinIterations) {
             EP_CPU_RELAX();
             ++spins;
         } else {

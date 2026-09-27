@@ -198,6 +198,10 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
     // Parallel radiant exchange: per-thread scratch and cost-balanced enclosure chunks
     int chunkBoundsThreads = 0;            // thread count the chunk bounds were computed for
     std::vector<int> enclosureChunkBounds; // numThreads + 1 enclosure boundaries covering all enclosures
+    int parallelDecision = 0;              // 0 = still measuring, 1 = run the exchange in parallel, -1 = run it serially
+    int decisionSamples = 0;               // timed full calls so far (alternating serial and parallel)
+    double serialSeconds = 0.0;            // summed phase-2 time of the serial samples
+    double parallelSeconds = 0.0;          // summed phase-2 time of the parallel samples
     std::vector<std::vector<Real64>> threadTempRad;
     std::vector<std::vector<Real64>> threadTempInKto4th;
     std::vector<std::vector<Real64>> threadEmiss;
@@ -222,6 +226,10 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
         this->absThermalIntAtMain.clear();
         this->chunkBoundsThreads = 0;
         this->enclosureChunkBounds.clear();
+        this->parallelDecision = 0;
+        this->decisionSamples = 0;
+        this->serialSeconds = 0.0;
+        this->parallelSeconds = 0.0;
         this->threadTempRad.clear();
         this->threadTempInKto4th.clear();
         this->threadEmiss.clear();

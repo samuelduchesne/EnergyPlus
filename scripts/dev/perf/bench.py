@@ -39,7 +39,9 @@ DEFAULT_EPW = REPO / "weather" / "USA_IL_Chicago-OHare.Intl.AP.725300_TMY3.epw"
 
 # Files whose content is compared between builds. Lines carrying the program version or time stamps are ignored.
 COMPARED_OUTPUTS = ["eplusout.eso", "eplusout.mtr", "eplusout.eio", "eplusout.err", "eplusout.rdd", "eplusout.mdd"]
-ERR_LINE_FILTER = re.compile(r"(Elapsed Time|EnergyPlus, Version|YMD=|Program Version|Started at|Simulation Time|\*\*\*\*\*)")
+ERR_LINE_FILTER = re.compile(
+    r"(Elapsed Time|EnergyPlus, Version|YMD=|Program Version|Started at|Simulation Time|\*\*\*\*\*|Program Control Information:Threads/Parallel Sims)"
+)
 
 
 def weather_for(idf: Path) -> Path:

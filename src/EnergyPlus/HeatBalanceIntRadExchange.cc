@@ -47,6 +47,7 @@
 
 // C++ Headers
 #include <algorithm>
+#include <chrono>
 #include <cassert>
 #include <cmath>
 #include <format>
@@ -426,27 +427,56 @@ namespace HeatBalanceIntRadExchange {
             }
         };
 
-        // Enclosure chunks of roughly equal cost (surfaces squared) for the parallel phase; computed once per thread count.
-        // Small models run serially: the whole exchange then costs about as much as a fork/join.
+        // Enclosure chunks of roughly equal cost for the parallel phase, computed once per thread count. The cost
+        // model is per-surface overhead plus the surface pairs: n * (n + 32). Small models run serially.
         if (!PartialResimulate && d.chunkBoundsThreads != numThreads) {
-            constexpr double minSurfacePairsForParallel = 2000.0;
+            constexpr double minCostForParallel = 4000.0;
             int const nEncl = state.dataViewFactor->NumOfRadiantEnclosures;
             auto cost = [&state](int const e) {
                 double const n = state.dataViewFactor->EnclRadInfo(e).NumOfSurfaces;
-                return n * n;
+                return n * (n + 32.0);
             };
-            double totalPairs = 0.0;
+            double totalCost = 0.0;
             for (int e = 1; e <= nEncl; ++e) {
-                totalPairs += cost(e);
+                totalCost += cost(e);
             }
             d.enclosureChunkBounds.clear();
-            if (numThreads > 1 && nEncl > 1 && totalPairs >= minSurfacePairsForParallel) {
+            d.parallelDecision = 0;
+            d.decisionSamples = 0;
+            d.serialSeconds = d.parallelSeconds = 0.0;
+            if (numThreads > 1 && nEncl > 1 && totalCost >= minCostForParallel) {
                 d.enclosureChunkBounds = Parallel::pool(state).balancedBounds(1, nEncl + 1, cost);
             }
             d.chunkBoundsThreads = numThreads;
         }
 
+        // Whether the parallel phase pays for its fork/join and cold caches depends on the model, the machine and
+        // what else is running, so full calls are timed alternately serial and parallel, the faster variant is kept
+        // for a while, and the comparison is repeated periodically. Only the scheduling changes; both variants
+        // compute identical results.
+        constexpr int samplesPerVariant = 64;
+        constexpr int callsBetweenComparisons = 4096;
+        bool runParallel = false;
+        bool timeThisCall = false;
         if (!PartialResimulate && !d.enclosureChunkBounds.empty()) {
+            if (d.parallelDecision != 0) {
+                runParallel = d.parallelDecision > 0;
+                if (++d.decisionSamples >= 2 * samplesPerVariant + callsBetweenComparisons) {
+                    d.parallelDecision = 0;
+                    d.decisionSamples = 0;
+                    d.serialSeconds = d.parallelSeconds = 0.0;
+                }
+            } else {
+                timeThisCall = true;
+                runParallel = (d.decisionSamples % 2) == 1;
+            }
+        }
+        std::chrono::steady_clock::time_point phase2Start;
+        if (timeThisCall) {
+            phase2Start = std::chrono::steady_clock::now();
+        }
+
+        if (runParallel) {
             Parallel::pool(state).parallelChunks(d.enclosureChunkBounds, [&](int const chunkBegin, int const chunkEnd, int const tid) {
                 for (int enclosureNum = chunkBegin; enclosureNum < chunkEnd; ++enclosureNum) {
                     exchangeEnclosure(enclosureNum, tid);
@@ -455,6 +485,22 @@ namespace HeatBalanceIntRadExchange {
         } else {
             for (int enclosureNum = startEnclosure; enclosureNum <= endEnclosure; ++enclosureNum) {
                 exchangeEnclosure(enclosureNum, 0);
+            }
+        }
+
+        if (timeThisCall) {
+            constexpr double requiredGain = 0.9; // keep the parallel variant only when it is at least 10% faster
+            double const seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - phase2Start).count();
+            (runParallel ? d.parallelSeconds : d.serialSeconds) += seconds;
+            if (++d.decisionSamples >= 2 * samplesPerVariant) {
+                d.parallelDecision = (d.parallelSeconds < requiredGain * d.serialSeconds) ? 1 : -1;
+                if (state.dataSysVars->DeveloperFlag) {
+                    DisplayString(state,
+                                  std::format(" Interior radiant exchange: serial {:.1f} us/call, parallel {:.1f} us/call, using {}",
+                                              1.0e6 * d.serialSeconds / samplesPerVariant,
+                                              1.0e6 * d.parallelSeconds / samplesPerVariant,
+                                              d.parallelDecision > 0 ? "parallel" : "serial"));
+                }
             }
         }
 
