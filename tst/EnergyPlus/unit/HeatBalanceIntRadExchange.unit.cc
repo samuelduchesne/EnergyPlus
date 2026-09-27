@@ -161,9 +161,6 @@ TEST_F(EnergyPlusFixture, HeatBalanceIntRadExchange_CarrollMRT)
     state->dataHeatBalSurf->SurfQdotRadNetLWInPerArea.allocate(SURFACES);
 
     state->dataHeatBalIntRadExchg->MaxNumOfRadEnclosureSurfs = SURFACES;
-    state->dataHeatBalIntRadExchg->SurfaceEmiss.allocate(SURFACES);
-    state->dataHeatBalIntRadExchg->SurfaceTempInKto4th.allocate(SURFACES);
-    state->dataHeatBalIntRadExchg->SurfaceTempRad.allocate(SURFACES);
 
     for (int surfaceNum = 1; surfaceNum <= SURFACES; surfaceNum++) {
         state->dataSurface->Surface(surfaceNum).Construction = surfaceNum;
