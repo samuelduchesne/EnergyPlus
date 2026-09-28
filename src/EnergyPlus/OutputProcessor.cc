@@ -2699,6 +2699,8 @@ namespace OutputProcessor {
         Stored = false;
     } // OutVar::WriteOutput()
 
+    void writeIdValueRecord(InputOutputFile &file, int const reportID, std::string_view const value); // defined below
+
     void WriteCumulativeReportMeterData(EnergyPlusData &state,
                                         int const reportID,      // The variable's report ID
                                         Real64 const repValue,   // The variable's value
