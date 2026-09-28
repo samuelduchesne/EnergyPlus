@@ -168,6 +168,8 @@ public:
     InputOutputFile &ensure_open(EnergyPlusData &state, const std::string &caller, bool output_to_file = true);
 
     void open(const bool forAppend = false, bool output_to_file = true);
+    // Writes pre-formatted characters (same stream selection as print(), no formatting)
+    void write(std::string_view text);
     std::fstream::pos_type position() const noexcept;
     std::vector<std::string> getLines();
     void open_as_stringstream();

@@ -182,6 +182,7 @@ struct NodeInputManagerData : BaseGlobalStruct
     Array1D<Sched::Schedule *> NodeSpecificHeatScheds;
     std::vector<std::string> nodeReportingStrings;
     std::vector<Fluid::GlycolProps *> nodeFluids;
+    std::vector<Real64> nodeFluidRhoStd; // density of each node's fluid at Constant::InitConvTemp (0.0 for non-glycol nodes)
 
     void init_constant_state([[maybe_unused]] EnergyPlusData &state) override
     {
@@ -207,6 +208,9 @@ struct NodeInputManagerData : BaseGlobalStruct
         this->GetOnlySingleNodeNodeNums.deallocate();
         this->GetOnlySingleNodeFirstTime = true;
         this->NodeWetBulbRepReq.deallocate();
+        this->nodeReportingStrings.clear();
+        this->nodeFluids.clear();
+        this->nodeFluidRhoStd.clear();
     }
 };
 

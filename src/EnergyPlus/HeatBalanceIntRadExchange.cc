@@ -195,9 +195,14 @@ namespace HeatBalanceIntRadExchange {
                 }
             }
         } else {
-            NetLWRadToSurf = 0.0;
-            for (int SurfNum = 1; SurfNum <= state.dataSurface->TotSurfaces; SurfNum++) {
-                state.dataSurface->SurfWinIRfromParentZone(SurfNum) = 0.0;
+            // Only enclosure surfaces are accumulated into below, and surfaces outside every radiant enclosure are never
+            // written by anything else (the representative-surface copy at the end covers the non-representative ones),
+            // so zeroing the enclosure surfaces is equivalent to zeroing the whole TotSurfaces arrays.
+            for (int enclosureNum = startEnclosure; enclosureNum <= endEnclosure; ++enclosureNum) {
+                for (int i : state.dataViewFactor->EnclRadInfo(enclosureNum).SurfacePtr) {
+                    NetLWRadToSurf(i) = 0.0;
+                    state.dataSurface->SurfWinIRfromParentZone(i) = 0.0;
+                }
             }
         }
 

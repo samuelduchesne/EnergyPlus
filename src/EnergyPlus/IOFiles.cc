@@ -48,6 +48,7 @@
 // C++ Headers
 #include <algorithm>
 #include <format>
+#include <iostream>
 #include <memory>
 
 // Third Party Headers
@@ -271,6 +272,13 @@ std::string InputOutputFile::get_output()
 
 InputOutputFile::InputOutputFile(fs::path FilePath, const bool DefaultToStdout) : filePath{std::move(FilePath)}, defaultToStdOut{DefaultToStdout}
 {
+}
+
+void InputOutputFile::write(std::string_view text)
+{
+    std::ostream *outputStream = os ? os.get() : (defaultToStdOut ? &std::cout : nullptr);
+    assert(outputStream != nullptr);
+    outputStream->write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
 std::ostream::pos_type InputOutputFile::position() const noexcept

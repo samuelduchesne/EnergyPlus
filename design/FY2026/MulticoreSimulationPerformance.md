@@ -882,7 +882,39 @@ radiant-exchange timer at 4 threads" is withdrawn as unrealistic for 8-surface e
 Phase 3 criterion (envelope timers ≥0.6× linear to 8 threads) stands but is to be measured on the
 fused kernel.
 
-### 13.5 Not yet done ###
+### 13.5 Latency work (Tier B, section 14.2) ###
+
+Measured with a one-week `ASHRAE901_OutPatientHealthCare` run under callgrind (46 G instructions,
+32% of it sizing) and the annual timers. Findings that drove the changes:
+
+ - `std::format` for the ESO records: 733,000 calls per simulated week at about 2,000 instructions
+   each (3.3%), i.e. most of the cost of writing a value. Replaced by direct assembly of
+   `<id>,<value>\n` for the ESO and MTR value records (same characters).
+ - `dynamic_cast` per output variable per timestep: 2.4–3.7%. Replaced by `static_cast` on the
+   already-known variable type.
+ - Small `memset`s: 10 million per week from per-space, per-layer zeroing loops in
+   `InitSolarHeatGains` (1%) and the whole-array zeroing of `NetLWRadToSurf` in the radiant
+   exchange (1%). The radiant exchange now zeroes only enclosure surfaces (equivalent, since
+   nothing else writes the others); the solar loops are left for the kernel-table work.
+ - `pow`: 14 million calls (3.8%), 5.6 million from the TARP natural convection correlation
+   (`x^(1/3)`) and 5.5 million from water-coil UA and simple-heating-coil correlations. These are
+   real arithmetic; `cbrt` would not be bit-identical, so they stay.
+ - Heap allocation: 12 million `operator new` per week (about 5% with `free`), 3.1 million of them
+   `Array<double>` copies from `ZoneSizingData` copies in `BaseSizer::initializeWithinEP` (sizing
+   only, plan item 9a), most of the rest `std::string` temporaries.
+ - `GetInstantMeterValue`, `GatherMonthlyResultsForTimestep`: 3.7% inclusive, driven by nine
+   `Output:Table:Monthly` objects evaluated per zone and system timestep through ObjexxFCL indexing.
+ - `CalcMoreNodeInfo`: three glycol property lookups per water node per system timestep, one of
+   them (density at the standard temperature) constant; now evaluated once.
+ - Iterative psychrometric solvers probed the saturation-pressure table with a fresh guess on
+   every iteration (a guaranteed miss plus an eviction); they now evaluate the raw function at the
+   table's quantized temperature, which is the value the table would have returned.
+
+Link-time optimization (`-flto=auto`, new `ENABLE_LTO` CMake option, off by default): identical
+outputs on the three benchmark models; design-day wall time −0.3% (`HospitalBaseline`), −3.1%
+(`OutPatient`), −5.4% (`45zonevav`), median of 3.
+
+### 13.6 Not yet done ###
 
 Items 5.3.3–5.3.11 (Phase 1), the hardening table (5.2), regions P3–P14, the HVAC iteration work
 (Phase 4) and the nightly CI job. The next step with the best value/risk is 5.3.9b/9a (water-coil

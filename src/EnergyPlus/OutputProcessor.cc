@@ -47,6 +47,8 @@
 
 // C++ Headers
 #include <algorithm>
+#include <cstring>
+#include <charconv>
 #include <array>
 #include <cassert>
 #include <format>
@@ -2730,13 +2732,13 @@ namespace OutputProcessor {
         }
 
         if (state.files.mtr.good()) {
-            print(state.files.mtr, "{},{}\n", reportID, NumberOut);
+            writeIdValueRecord(state.files.mtr, reportID, NumberOut);
         }
         ++state.dataGlobal->StdMeterRecordCount;
 
         if (!meterOnlyFlag) {
             if (state.files.eso.good()) {
-                print(state.files.eso, "{},{}\n", reportID, NumberOut);
+                writeIdValueRecord(state.files.eso, reportID, NumberOut);
             }
             ++state.dataGlobal->StdOutputRecordCount;
         }
@@ -2771,11 +2773,11 @@ namespace OutputProcessor {
 
         if ((freq == ReportFreq::EachCall) || (freq == ReportFreq::TimeStep) || (freq == ReportFreq::Hour)) { // -1, 0, 1
             if (state.files.mtr.good()) {
-                print(state.files.mtr, "{},{}\n", RptNum, NumberOut);
+                writeIdValueRecord(state.files.mtr, RptNum, NumberOut);
             }
             ++state.dataGlobal->StdMeterRecordCount;
             if (state.files.eso.good() && !RptFO) {
-                print(state.files.eso, "{},{}\n", RptNum, NumberOut);
+                writeIdValueRecord(state.files.eso, RptNum, NumberOut);
                 ++state.dataGlobal->StdOutputRecordCount;
             }
         } else { // if ( ( reportingInterval == ReportDaily ) || ( reportingInterval == ReportMonthly ) || ( reportingInterval == ReportSim ) ) {
@@ -2814,6 +2816,20 @@ namespace OutputProcessor {
         }
     } // MeterPeriod::WriteReportData()
 
+    // Writes "<reportID>,<value>\n" to an output file without going through std::format. These records are the bulk
+    // of the ESO and MTR files, and a format call per record was about 2000 instructions in the profile.
+    void writeIdValueRecord(InputOutputFile &file, int const reportID, std::string_view const value)
+    {
+        std::array<char, 192> record;
+        char *p = std::to_chars(record.data(), record.data() + 16, reportID).ptr;
+        *p++ = ',';
+        size_t const n = std::min(value.size(), record.size() - static_cast<size_t>(p - record.data()) - 1);
+        std::memcpy(p, value.data(), n);
+        p += n;
+        *p++ = '\n';
+        file.write(std::string_view(record.data(), static_cast<size_t>(p - record.data())));
+    }
+
     void WriteNumericData(EnergyPlusData &state,
                           int const reportID,   // The variable's reporting ID
                           Real64 const repValue // The variable's value
@@ -2844,9 +2860,11 @@ namespace OutputProcessor {
         }
 
         if (state.files.eso.good()) {
-            std::array<char, 129> numericData{};
-            dtoa(repValue, numericData.data());
-            print(state.files.eso, "{},{}\n", reportID, numericData.data());
+            // "<reportID>,<value>\n" assembled directly: this runs once per reported value per timestep and a
+            // std::format call here was about 2000 instructions in the profile, most of the ESO write cost.
+            char numericData[129];
+            dtoa(repValue, numericData);
+            writeIdValueRecord(state.files.eso, reportID, numericData);
         }
     } // WriteNumericData()
 
@@ -2878,7 +2896,9 @@ namespace OutputProcessor {
         }
 
         if (state.files.eso.good()) {
-            print(state.files.eso, "{},{}\n", reportID, repValue);
+            char intData[24];
+            auto const r = std::to_chars(intData, intData + sizeof(intData), repValue);
+            writeIdValueRecord(state.files.eso, reportID, std::string_view(intData, static_cast<size_t>(r.ptr - intData)));
         }
     } // WriteNumericData()
 
@@ -2925,7 +2945,7 @@ namespace OutputProcessor {
             }
 
             if ((freq == ReportFreq::EachCall) || (freq == ReportFreq::TimeStep) || (freq == ReportFreq::Hour)) { // -1, 0, 1
-                print(state.files.eso, "{},{}\n", ReportID, NumberOut);
+                writeIdValueRecord(state.files.eso, ReportID, NumberOut);
             } else {
                 std::array<char, 128> minValString{}, maxValString{};
                 dtoa(MinValue, minValString.data());

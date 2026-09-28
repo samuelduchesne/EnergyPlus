@@ -1008,6 +1008,7 @@ void CalcMoreNodeInfo(EnergyPlusData &state)
         NodeSpecificHeatScheds.allocate(state.dataLoopNodes->NumOfNodes);
         nodeReportingStrings.reserve(state.dataLoopNodes->NumOfNodes);
         nodeFluids.reserve(state.dataLoopNodes->NumOfNodes);
+        state.dataNodeInputMgr->nodeFluidRhoStd.reserve(state.dataLoopNodes->NumOfNodes);
         state.dataNodeInputMgr->NodeWetBulbRepReq = false;
         NodeWetBulbScheds = nullptr;
         NodeRelHumidityRepReq = false;
@@ -1021,6 +1022,9 @@ void CalcMoreNodeInfo(EnergyPlusData &state)
             nodeReportingStrings.push_back(std::string(NodeReportingCalc + state.dataLoopNodes->NodeID(iNode)));
             nodeFluids.push_back(
                 (state.dataLoopNodes->Node(iNode).FluidIndex == 0) ? nullptr : state.dataFluid->glycols(state.dataLoopNodes->Node(iNode).FluidIndex));
+            // Density at the standard temperature does not change during the run; evaluated once instead of per timestep
+            state.dataNodeInputMgr->nodeFluidRhoStd.push_back(
+                (nodeFluids.back() != nullptr) ? nodeFluids.back()->getDensity(state, Constant::InitConvTemp, nodeReportingStrings.back()) : 0.0);
 
             for (auto const *reqVar : state.dataOutputProcessor->reqVars) {
                 if (Util::SameString(reqVar->key, state.dataLoopNodes->NodeID(iNode)) || reqVar->key.empty()) {
@@ -1139,7 +1143,7 @@ void CalcMoreNodeInfo(EnergyPlusData &state)
                 Cp = CPCW(state.dataLoopNodes->Node(iNode).Temp);
             } else {
                 Cp = nodeFluids[iNode - 1]->getSpecificHeat(state, state.dataLoopNodes->Node(iNode).Temp, nodeReportingStrings[iNode - 1]);
-                rhoStd = nodeFluids[iNode - 1]->getDensity(state, Constant::InitConvTemp, nodeReportingStrings[iNode - 1]);
+                rhoStd = state.dataNodeInputMgr->nodeFluidRhoStd[iNode - 1];
                 rho = nodeFluids[iNode - 1]->getDensity(state, state.dataLoopNodes->Node(iNode).Temp, nodeReportingStrings[iNode - 1]);
             }
 
