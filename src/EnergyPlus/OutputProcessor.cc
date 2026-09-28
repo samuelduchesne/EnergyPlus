@@ -3065,12 +3065,12 @@ namespace OutputProcessor {
         auto &op = state.dataOutputProcessor;
 
         if (varType == VariableType::Integer) {
-            OutVarInt *varInt = dynamic_cast<OutVarInt *>(op->outVars[keyVarIndex]);
-            assert(varInt != nullptr);
+            OutVarInt *varInt = static_cast<OutVarInt *>(op->outVars[keyVarIndex]); // varType says which subclass this is
+            assert(dynamic_cast<OutVarInt *>(op->outVars[keyVarIndex]) != nullptr);
             *varInt->Which = SetIntVal;
         } else if (varType == VariableType::Real) {
-            OutVarReal *varReal = dynamic_cast<OutVarReal *>(op->outVars[keyVarIndex]);
-            assert(varReal != nullptr);
+            OutVarReal *varReal = static_cast<OutVarReal *>(op->outVars[keyVarIndex]);
+            assert(dynamic_cast<OutVarReal *>(op->outVars[keyVarIndex]) != nullptr);
             *varReal->Which = SetRealVal;
         } else if (varType == VariableType::Meter) {
             op->meters[keyVarIndex]->CurTSValue = SetRealVal;
@@ -3403,7 +3403,8 @@ void UpdateDataandReport(EnergyPlusData &state, OutputProcessor::TimeStepType co
             continue;
         }
 
-        Real64 value = (var->varType == VariableType::Real) ? *(dynamic_cast<OutVarReal *>(var))->Which : *(dynamic_cast<OutVarInt *>(var))->Which;
+        // varType identifies the subclass, so no run-time type check is needed here (this runs once per variable per timestep)
+        Real64 value = (var->varType == VariableType::Real) ? *(static_cast<OutVarReal *>(var))->Which : *(static_cast<OutVarInt *>(var))->Which;
 
         var->Stored = true;
 
@@ -4263,8 +4264,8 @@ Real64 GetInstantMeterValue(EnergyPlusData const &state,
                 continue;
             }
 
-            auto *rVar = dynamic_cast<OutVarReal *>(var);
-            assert(rVar != nullptr);
+            auto *rVar = static_cast<OutVarReal *>(var); // meter sources are always real variables
+            assert(dynamic_cast<OutVarReal *>(var) != nullptr);
             // Add to the total all of the appropriate variables
             InstantMeterValue += (*rVar->Which) * rVar->ZoneMult * rVar->ZoneListMult;
         }
@@ -4276,8 +4277,8 @@ Real64 GetInstantMeterValue(EnergyPlusData const &state,
             if (var->timeStepType != timeStepType) {
                 continue;
             }
-            auto *rVar = dynamic_cast<OutVarReal *>(var);
-            assert(rVar != nullptr);
+            auto *rVar = static_cast<OutVarReal *>(var); // meter sources are always real variables
+            assert(dynamic_cast<OutVarReal *>(var) != nullptr);
             InstantMeterValue += (*rVar->Which) * rVar->ZoneMult * rVar->ZoneListMult;
         }
         for (int srcVarNum : meter->srcVarNums) {
@@ -4285,8 +4286,8 @@ Real64 GetInstantMeterValue(EnergyPlusData const &state,
             if (var->timeStepType != timeStepType) {
                 continue;
             }
-            auto *rVar = dynamic_cast<OutVarReal *>(var);
-            assert(rVar != nullptr);
+            auto *rVar = static_cast<OutVarReal *>(var); // meter sources are always real variables
+            assert(dynamic_cast<OutVarReal *>(var) != nullptr);
             InstantMeterValue -= (*rVar->Which) * rVar->ZoneMult * rVar->ZoneListMult;
         }
     } else {
@@ -4334,8 +4335,8 @@ Real64 GetInternalVariableValue(EnergyPlusData &state,
         }
 
         // must use %Which, %Value is always zero if variable is not a requested report variable
-        resultVal = (varType == VariableType::Integer) ? (double)*(dynamic_cast<OutVarInt *>(op->outVars[keyVarIndex]))->Which
-                                                       : (double)*(dynamic_cast<OutVarReal *>(op->outVars[keyVarIndex]))->Which;
+        resultVal = (varType == VariableType::Integer) ? (double)*(static_cast<OutVarInt *>(op->outVars[keyVarIndex]))->Which
+                                                       : (double)*(static_cast<OutVarReal *>(op->outVars[keyVarIndex]))->Which;
     } else if (varType == VariableType::Meter) {
         resultVal = GetCurrentMeterValue(state, keyVarIndex);
     } else if (varType == VariableType::Schedule) {

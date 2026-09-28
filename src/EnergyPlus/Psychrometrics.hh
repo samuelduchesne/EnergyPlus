@@ -1059,12 +1059,37 @@ namespace Psychrometrics {
         return cPsat.Psat; // saturation pressure {Pascals}
     }
 
+    // Saturation pressure at the cache's quantized temperature, evaluated directly without touching the cache table.
+    // Returns exactly what PsyPsatFnTemp returns for the same T (the table only ever holds PsyPsatFnTemp_raw of the
+    // quantized temperature), so callers may mix the two freely. Meant for iterative solvers, whose successive
+    // temperature guesses almost never repeat: for them a table probe is a guaranteed cache-line miss plus a store
+    // that evicts a useful entry, on top of the evaluation that has to happen anyway.
+    inline Real64 PsyPsatFnTempQuantized(EnergyPlusData &state,
+                                         Real64 const T,                        // dry-bulb temperature {C}
+                                         std::string_view const CalledFrom = "" // routine this function was called from (error messages)
+    )
+    {
+        std::uint64_t constexpr Grid_Shift = 64 - 12 - psatprecision_bits;
+        DISABLE_WARNING_PUSH
+        DISABLE_WARNING_STRICT_ALIASING
+        Int64 Tdb_tag(*reinterpret_cast<Int64 const *>(&T) >> Grid_Shift);
+        Tdb_tag <<= Grid_Shift;
+        Real64 const Tdb_tag_r = *reinterpret_cast<Real64 const *>(&Tdb_tag);
+        DISABLE_WARNING_POP
+        return PsyPsatFnTemp_raw(state, Tdb_tag_r, CalledFrom);
+    }
+
 #else
 
     Real64 PsyPsatFnTemp(EnergyPlusData &state,
                          Real64 const T,                        // dry-bulb temperature {C}
                          std::string_view const CalledFrom = "" // routine this function was called from (error messages)
     );
+
+    inline Real64 PsyPsatFnTempQuantized(EnergyPlusData &state, Real64 const T, std::string_view const CalledFrom = "")
+    {
+        return PsyPsatFnTemp(state, T, CalledFrom);
+    }
 
 #endif
 
