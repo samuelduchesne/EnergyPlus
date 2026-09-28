@@ -480,8 +480,7 @@ namespace Psychrometrics {
 
             // Determine the saturation pressure for wet bulb temperature
             PSatstar =
-                PsyPsatFnTempQuantized(
-                    state, WBT, (CalledFrom.empty() ? PsyRoutineNames[static_cast<int>(PsychrometricFunction::TwbFnTdbWPb)] : CalledFrom));
+                PsyPsatFnTemp(state, WBT, (CalledFrom.empty() ? PsyRoutineNames[static_cast<int>(PsychrometricFunction::TwbFnTdbWPb)] : CalledFrom));
 
             // Determine humidity ratio for given saturation pressure
             Wstar = 0.62198 * PSatstar / (Patm - PSatstar);
@@ -1376,7 +1375,7 @@ namespace Psychrometrics {
                 for (iter = 1; iter <= itmax; ++iter) {
 
                     // Calculate saturation pressure for estimated boiling temperature
-                    pSat = PsyPsatFnTempQuantized(
+                    pSat = PsyPsatFnTemp(
                         state, tSat, (CalledFrom_empty ? PsyRoutineNames[static_cast<int>(PsychrometricFunction::TsatFnPb)] : CalledFrom));
 
                     // Compare with specified pressure and update estimate of temperature

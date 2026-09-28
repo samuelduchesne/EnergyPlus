@@ -3573,6 +3573,10 @@ void GatherMonthlyResultsForTimestep(EnergyPlusData &state, OutputProcessor::Tim
         (t_timeStepType == OutputProcessor::TimeStepType::System) ? state.dataHVACGlobal->TimeStepSys : state.dataGlobal->TimeStepZone;
 
     ort->IsMonthGathered(state.dataEnvrn->Month) = true;
+    // The time stamp of this timestep is the same for every column, so it is computed once here rather than per column.
+    int const minuteCalculated = OutputProcessor::DetermineMinuteForReporting(state);
+    int timestepTimeStamp;
+    EncodeMonDayHrMin(timestepTimeStamp, state.dataEnvrn->Month, state.dataEnvrn->DayOfMonth, state.dataGlobal->HourOfDay, minuteCalculated);
     for (int iTable = 1; iTable <= ort->MonthlyTablesCount; ++iTable) {
         bool activeMinMax = false;     // at the beginning of the new timestep
         bool activeHoursShown = false; // fix by JG addressing CR6482
@@ -3596,14 +3600,6 @@ void GatherMonthlyResultsForTimestep(EnergyPlusData &state, OutputProcessor::Tim
                 int newTimeStamp = 0;
                 Real64 newDuration = 0.0;
                 bool activeNewValue = false;
-                // the current timestamp
-                int const minuteCalculated = OutputProcessor::DetermineMinuteForReporting(state);
-                //      minuteCalculated = (CurrentTime - INT(CurrentTime))*60
-                //      IF (t_timeStepType .EQ. OutputProcessor::TimeStepType::TimeStepSystem) minuteCalculated = minuteCalculated +
-                //      SysTimeElapsed * 60 minuteCalculated = INT((TimeStep-1) * TimeStepZone * 60) + INT((SysTimeElapsed + TimeStepSys) * 60)
-                int timestepTimeStamp;
-                EncodeMonDayHrMin(
-                    timestepTimeStamp, state.dataEnvrn->Month, state.dataEnvrn->DayOfMonth, state.dataGlobal->HourOfDay, minuteCalculated);
                 // perform the selected aggregation type
                 // use next lines since it is faster was: SELECT CASE (MonthlyColumns(curCol)%aggType)
                 switch (state.dataOutRptTab->MonthlyColumnsAggType(curCol)) {

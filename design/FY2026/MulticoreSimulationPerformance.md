@@ -765,7 +765,15 @@ the time-stamped version lines. The validation set covers the code paths touched
 `1ZoneUncontrolled_Win_ASH55_Thermal_Comfort`, `DaylightingDeviceShelf` (glare shading control),
 `AirflowWindowsAndBetweenGlassBlinds`, `MovableIntInsulationLightsLowE`, `RadLoHydrHeatCoolAuto`
 (zone re-simulation), `EquivalentLayerWindow`, `5ZoneEndUses` (water use), `CarrollMRT-RefBldgLargeOffice`,
-`ZoneCoupledKivaRefBldgMediumOffice` and `45zonevav`.
+`ZoneCoupledKivaRefBldgMediumOffice` and `45zonevav` (`1ZoneUncontrolled_win_1` replaces the
+thermal-comfort model, whose weather file is not in the repository).
+
+**Correction (2026-09-28).** Until that date every "baseline" run of the harness loaded the *new*
+library (section 13.7), so the identity claims and the baseline-vs-new wall times recorded before
+it were self-comparisons. Everything below has been re-established against the true `e2fd2334`
+library: the identity statements now hold on the 11-model set above plus the 44-model sweep of
+13.7, and the wall-time tables carry the re-measured numbers where they were affected. One real
+regression that the defective harness had hidden (movable insulation, 13.7) is fixed.
 
 ### 13.1 Phase 0 — bugs (commit "Fix process-global state and repeated window-gain accumulation") ###
 
@@ -800,18 +808,22 @@ Skipping the repeated "Outside" `CalcInteriorRadExchange` (the "Main" call recor
 and inside thermal absorptances of all heat transfer surfaces; the full "Outside" call is skipped
 when they are unchanged, and a zone re-simulation is never skipped) and removing the per-iteration
 whole-array copies and the per-call heap allocation of the radiation temperature array are both
-identical on the validation set. Wall time, baseline → all commits of this log at `--threads 1`
-(annual: median of 2; design day: median of 3):
+identical on the validation set. Wall time, true `e2fd2334` baseline → all commits of this log
+through 13.7 (Phase 0–1, the pilot at `--threads 1`, and the latency items of 13.5), measured on
+2026-09-28 after the harness fix (annual: single run each, same VM, back to back; design day:
+median of 3):
 
-| Model | Annual baseline | Annual now | Change | Design day baseline | Design day now |
-|---|---|---|---|---|---|
-| `ASHRAE901_OutPatientHealthCare` | 147.0 s | 144.3 s | −1.8% | 9.03 s | 8.99 s |
-| `HospitalBaseline` | 178.2 s | 176.7 s | −0.8% | 15.99 s | 15.93 s |
-| `45zonevav` | 33.8 s | 33.9 s | +0.2% (noise) | 2.43 s | 2.32 s |
+| Model | Annual baseline | Annual now | Change | Design day baseline | Design day now | Change |
+|---|---|---|---|---|---|---|
+| `ASHRAE901_OutPatientHealthCare` | 166.9 s | 148.4 s | −11.1% | 9.47 s | 9.00 s | −5.0% |
+| `HospitalBaseline` | 190.5 s | 178.6 s | −6.3% | 17.18 s | 16.40 s | −4.5% |
+| `45zonevav` | 37.1 s | 35.0 s | −5.4% | 2.78 s | 2.40 s | −13% (min-to-min −7.5%) |
 
-The saving is one of the 2 + N_iter radiant-exchange calls per timestep, i.e. about a quarter of the
-4.9–5.4% that `CalcInteriorRadExchange` costs, consistent with the numbers above. The array-copy
-item is a prerequisite for the per-space parallel iteration (P4) rather than a serial win.
+The table replaces the one recorded before the harness fix, which had compared the new build with
+itself and reported noise. The Phase 1 share of the saving is one of the 2 + N_iter
+radiant-exchange calls per timestep (about a quarter of the 4.9–5.4% that `CalcInteriorRadExchange`
+costs); the rest is the reporting and cast work of 13.5. The array-copy item is a prerequisite for
+the per-space parallel iteration (P4) rather than a serial win.
 
 The annual phase timers of the final build (1 thread) put numbers on section 2.3 for these models:
 
@@ -901,14 +913,22 @@ Measured with a one-week `ASHRAE901_OutPatientHealthCare` run under callgrind (4
    real arithmetic; `cbrt` would not be bit-identical, so they stay.
  - Heap allocation: 12 million `operator new` per week (about 5% with `free`), 3.1 million of them
    `Array<double>` copies from `ZoneSizingData` copies in `BaseSizer::initializeWithinEP` (sizing
-   only, plan item 9a), most of the rest `std::string` temporaries.
+   only, plan item 9a), most of the rest `std::string` temporaries. The three sizing vectors
+   (`FinalZoneSizing`, `TermUnitFinalZoneSizing`, `FinalSysSizing`, 3.4% of the one-week
+   instructions and 4.5% of its level-1 data misses) are now read-only views on the state arrays
+   (`SizingDataView`); a sizer initialized from the API still owns its own storage. The other
+   vectors the sizer copies stay copies: `CoolingCapacitySizing` writes into its copy of
+   `PrimaryAirSystems`, so sharing it would change results.
  - `GetInstantMeterValue`, `GatherMonthlyResultsForTimestep`: 3.7% inclusive, driven by nine
-   `Output:Table:Monthly` objects evaluated per zone and system timestep through ObjexxFCL indexing.
+   `Output:Table:Monthly` objects evaluated per zone and system timestep through ObjexxFCL indexing
+   (13,000 column visits per timestep on this model). The time stamp that every visit rebuilt (two
+   calls) is now computed once per timestep; the column walk itself is left as is.
  - `CalcMoreNodeInfo`: three glycol property lookups per water node per system timestep, one of
    them (density at the standard temperature) constant; now evaluated once.
- - Iterative psychrometric solvers probed the saturation-pressure table with a fresh guess on
-   every iteration (a guaranteed miss plus an eviction); they now evaluate the raw function at the
-   table's quantized temperature, which is the value the table would have returned.
+ - Iterative psychrometric solvers probe the saturation-pressure table with a fresh guess on every
+   iteration. Evaluating the raw function at the table's quantized temperature instead (identical
+   value) was tried and reverted: on a two-day `OutPatient` run with cache simulation it removed
+   3.4 M level-1 data misses inside `PsyTsatFnPb` but added 139 M instructions, a wash at best.
 
 Link-time optimization (`-flto=auto`, new `ENABLE_LTO` CMake option, off by default): identical
 outputs on the three benchmark models; design-day wall time −0.3% (`HospitalBaseline`), −3.1%
@@ -920,6 +940,50 @@ Items 5.3.3–5.3.11 (Phase 1), the hardening table (5.2), regions P3–P14, the
 (Phase 4) and the nightly CI job. The next step with the best value/risk is 5.3.9b/9a (water-coil
 controller and sizing copies, 10–11.5% of the hospital profiles) followed by the reporting items
 (5.3.7).
+
+### 13.7 Measurement-harness defect, and what re-validation found ###
+
+`bench.py` ran the copied baseline executable without setting `LD_LIBRARY_PATH`. The executable's
+`RUNPATH` is the build directory it was linked in, so `baseline/energyplus` loaded
+`build/Products/libenergyplusapi.so`, i.e. the library under test. Every baseline-vs-new comparison
+made with the harness before 2026-09-28 (identity checks and wall times in 13.1, 13.3 and 13.5)
+compared the new build with itself; only the thread-count comparisons (13.4), the LTO comparison
+(a separate build directory with its own `RUNPATH`) and the chunked-run comparisons (14.1) were
+real. Found when a callgrind run of "both" binaries returned the same instruction count to five
+digits. The runner now sets `LD_LIBRARY_PATH` to each executable's directory and prints the
+resolved library for every build; the validation scripts were rerun.
+
+Re-validation against the true baseline library:
+
+ - Identity holds on 10 of the 11 models of the validation set and, after the fix below, on all 11
+   and on a 44-model sweep chosen for feature coverage (CondFD, PCM, AirflowNetwork, complex
+   fenestration, TDD, Kiva and ground domains, radiant systems, movable insulation inside and
+   outside, swimming pool, ice and chilled-water storage, VRF, PIU, fan coils, DOAS, PV and BIPVT,
+   green roof, EMS, economics, resilience reports, room air models, night ventilation).
+ - `MovableIntInsulationLightsLowE` differed: the inside surface heat balance no longer converged.
+   Commit "Drop per-iteration whole-array copies in the inside surface heat balance" had removed the
+   per-iteration copy `SurfTempInTmpOld = SurfTempInTmp` as write-only. It is read for surfaces with
+   interior movable insulation (their damped temperature update and their convergence check). The
+   copy is restored for exactly those surfaces (`intMovInsulSurfNums`), which is what the whole-array
+   copy amounted to at every reading site.
+ - Instruction counts (callgrind, one-week `OutPatient`, sizing included), true baseline → current:
+   46.71 G → 44.85 G (−4.0%). `__dynamic_cast` 1.09 G → 0.03 G, `memset` 1.53 G → 1.01 G,
+   `CalcInteriorRadExchange` 4.55 G → 3.92 G (the skipped "Outside" call). `std::vformat` is
+   unchanged at 0.23 G: the ESO record writer was not the `std::format` consumer the profile
+   suggested, so that part of the 13.5 entry is withdrawn. The remaining 0.73 M `std::format`
+   calls per week (3.3% inclusive) are the EMS trace lines that this model requests with
+   `Output:EnergyManagementSystem, Verbose`: `WriteTrace` built the time-stamp string for every
+   traced instruction. It is now built once per timestep and the record is written without
+   `std::format` (same bytes in the edd file, which the harness now compares as well).
+ - Cache simulation (callgrind, two-day `OutPatient`, true baseline → current): 37.76 G → 36.68 G
+   instructions, 1.169 G → 1.161 G level-1 data misses, 5.6 M last-level misses in both. The
+   last-level miss count is tiny (one per 6,700 instructions): on a core with a large L3 this code
+   is not DRAM-latency bound, it is L1-miss and dependency bound. The level-1 misses concentrate in
+   the envelope kernels (`CalcHeatBalanceInsideSurf2CTFOnly` 10.8%, `CalcInteriorRadExchange` 8.4%,
+   `CalculateZoneMRT` 2.6%, `InitSurfaceHeatBalance` 2.2%, `ReportSurfaceHeatBalance` 2.0%) and in
+   the meter walk `GetInstantMeterValue` (3.1%), i.e. in the per-surface arrays that are indexed
+   through several indirections per surface. That is the data-layout work of 5.3.9 and 14.2 (fused
+   per-space kernels over surface-ordered tables); nothing smaller will move it.
 
 ## 14. Reassessment: what can make a run an order of magnitude faster ##
 

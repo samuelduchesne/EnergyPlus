@@ -222,6 +222,16 @@ struct RuntimeLanguageProcessorData : BaseGlobalStruct
     std::unordered_map<std::string, std::string> ErlStackUniqueNames;
     std::unordered_map<std::string, std::string> RuntimeReportVarUniqueNames;
     bool WriteTraceMyOneTimeFlag = false;
+    // WriteTrace time stamp of the previous trace line and the state it was built from; every EMS instruction of a
+    // timestep produces the same time stamp, so it is rebuilt only when one of these changes.
+    std::string traceTimeString;
+    std::string traceTimeEnvironmentName;
+    std::string traceTimeCurMnDy;
+    Real64 traceTimeCurrentTime = -1.0;
+    Real64 traceTimeSysTimeElapsed = -1.0;
+    Real64 traceTimeTimeStepSys = -1.0;
+    Real64 traceTimeTimeStepZone = -1.0;
+    int traceTimePhase = -1;
     Array1D<RuntimeLanguageProcessor::TokenType> Token;
     Array1D<RuntimeLanguageProcessor::TokenType> PEToken;
 
@@ -272,6 +282,14 @@ struct RuntimeLanguageProcessorData : BaseGlobalStruct
         this->ErlStackUniqueNames.clear();
         this->RuntimeReportVarUniqueNames.clear();
         this->WriteTraceMyOneTimeFlag = false;
+        this->traceTimeString.clear();
+        this->traceTimeEnvironmentName.clear();
+        this->traceTimeCurMnDy.clear();
+        this->traceTimeCurrentTime = -1.0;
+        this->traceTimeSysTimeElapsed = -1.0;
+        this->traceTimeTimeStepSys = -1.0;
+        this->traceTimeTimeStepZone = -1.0;
+        this->traceTimePhase = -1;
         this->PEToken.clear();
         this->Token.clear();
     }

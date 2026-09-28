@@ -62,6 +62,56 @@
 
 namespace EnergyPlus {
 
+// Read-only view of a sizing array owned by EnergyPlusData. BaseSizer::initializeWithinEP used to copy the
+// FinalZoneSizing, TermUnitFinalZoneSizing and FinalSysSizing vectors into every sizer on every call; on a
+// sizing-heavy run those copies (each element carries several timestep-long arrays) were 3-4% of all
+// instructions. Sizers only read these, so the view points at the state vectors instead. A sizer that is
+// initialized outside EnergyPlus (initializeFromAPI) allocates its own storage through allocate().
+template <typename T> class SizingDataView
+{
+public:
+    using size_type = typename EPVector<T>::size_type;
+
+    void bind(EPVector<T> &v)
+    {
+        m_ref = &v;
+    }
+    void allocate(size_type n)
+    {
+        m_owned.allocate(n);
+        m_ref = &m_owned;
+    }
+    void clear()
+    {
+        m_owned.clear();
+        m_ref = nullptr;
+    }
+    [[nodiscard]] bool empty() const
+    {
+        return m_ref == nullptr || m_ref->empty();
+    }
+    [[nodiscard]] size_type size() const
+    {
+        return m_ref == nullptr ? 0 : m_ref->size();
+    }
+    [[nodiscard]] T &operator()(size_type n)
+    {
+        return (*m_ref)(n);
+    }
+    [[nodiscard]] T const &operator()(size_type n) const
+    {
+        return (*m_ref)(n);
+    }
+    operator EPVector<T> const &() const
+    {
+        return m_ref == nullptr ? m_owned : *m_ref;
+    }
+
+private:
+    EPVector<T> *m_ref = nullptr;
+    EPVector<T> m_owned;
+};
+
 enum class AutoSizingType
 {
     // align with DataHVACGlobals so scalable sizing strings can be applied
@@ -256,9 +306,9 @@ struct BaseSizer
     EPVector<DataSizing::ZoneEqSizingData> zoneEqSizing;
     EPVector<DataAirLoop::OutsideAirSysProps> outsideAirSys;
     EPVector<DataSizing::TermUnitSizingData> termUnitSizing;
-    EPVector<DataSizing::TermUnitZoneSizingData> termUnitFinalZoneSizing;
-    EPVector<DataSizing::ZoneSizingData> finalZoneSizing;
-    EPVector<DataSizing::SystemSizingData> finalSysSizing;
+    SizingDataView<DataSizing::TermUnitZoneSizingData> termUnitFinalZoneSizing;
+    SizingDataView<DataSizing::ZoneSizingData> finalZoneSizing;
+    SizingDataView<DataSizing::SystemSizingData> finalSysSizing;
     EPVector<DataSizing::PlantSizingData> plantSizData;
     EPVector<DataAirSystems::DefinePrimaryAirSystem> primaryAirSystem;
     std::vector<AirLoopHVACDOAS::AirLoopDOAS> airloopDOAS;

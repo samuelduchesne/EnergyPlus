@@ -1007,32 +1007,62 @@ void WriteTrace(EnergyPlusData &state, int const StackNum, int const Instruction
     LineString = state.dataRuntimeLang->ErlStack(StackNum).Line(LineNum);
     cValueString = ValueToString(ReturnValue);
 
-    // put together timestamp info
-    if (state.dataGlobal->WarmupFlag) {
-        if (!state.dataGlobal->SetupFlag) {
-            if (!state.dataGlobal->DoingSizing) {
-                OccurrenceTimingInfo = " During Warmup, Occurrence info=";
+    // put together timestamp info. It is the same for every instruction traced in a timestep, so the string of the
+    // previous trace line is reused while everything it was built from is unchanged.
+    auto &rlp = state.dataRuntimeLangProcessor;
+    int const phase = (state.dataGlobal->WarmupFlag ? 1 : 0) + (state.dataGlobal->SetupFlag ? 2 : 0) + (state.dataGlobal->DoingSizing ? 4 : 0);
+    if (phase != rlp->traceTimePhase || state.dataGlobal->CurrentTime != rlp->traceTimeCurrentTime ||
+        state.dataHVACGlobal->SysTimeElapsed != rlp->traceTimeSysTimeElapsed || state.dataHVACGlobal->TimeStepSys != rlp->traceTimeTimeStepSys ||
+        state.dataGlobal->TimeStepZone != rlp->traceTimeTimeStepZone || state.dataEnvrn->EnvironmentName != rlp->traceTimeEnvironmentName ||
+        state.dataEnvrn->CurMnDy != rlp->traceTimeCurMnDy) {
+        if (state.dataGlobal->WarmupFlag) {
+            if (!state.dataGlobal->SetupFlag) {
+                if (!state.dataGlobal->DoingSizing) {
+                    OccurrenceTimingInfo = " During Warmup, Occurrence info=";
+                } else {
+                    OccurrenceTimingInfo = " During Warmup & Sizing, Occurrence info=";
+                }
             } else {
-                OccurrenceTimingInfo = " During Warmup & Sizing, Occurrence info=";
+                if (!state.dataGlobal->DoingSizing) {
+                    OccurrenceTimingInfo = " During Setup, Occurrence info=";
+                } else {
+                    OccurrenceTimingInfo = " During Setup & Sizing, Occurrence info=";
+                }
             }
         } else {
             if (!state.dataGlobal->DoingSizing) {
-                OccurrenceTimingInfo = " During Setup, Occurrence info=";
+                OccurrenceTimingInfo = " Occurrence info=";
             } else {
-                OccurrenceTimingInfo = " During Setup & Sizing, Occurrence info=";
+                OccurrenceTimingInfo = " During Sizing, Occurrence info=";
             }
         }
-    } else {
-        if (!state.dataGlobal->DoingSizing) {
-            OccurrenceTimingInfo = " Occurrence info=";
-        } else {
-            OccurrenceTimingInfo = " During Sizing, Occurrence info=";
-        }
+        rlp->traceTimeString =
+            OccurrenceTimingInfo + state.dataEnvrn->EnvironmentName + ", " + state.dataEnvrn->CurMnDy + ' ' + CreateSysTimeIntervalString(state);
+        rlp->traceTimePhase = phase;
+        rlp->traceTimeCurrentTime = state.dataGlobal->CurrentTime;
+        rlp->traceTimeSysTimeElapsed = state.dataHVACGlobal->SysTimeElapsed;
+        rlp->traceTimeTimeStepSys = state.dataHVACGlobal->TimeStepSys;
+        rlp->traceTimeTimeStepZone = state.dataGlobal->TimeStepZone;
+        rlp->traceTimeEnvironmentName = state.dataEnvrn->EnvironmentName;
+        rlp->traceTimeCurMnDy = state.dataEnvrn->CurMnDy;
     }
-    TimeString = OccurrenceTimingInfo + state.dataEnvrn->EnvironmentName + ", " + state.dataEnvrn->CurMnDy + ' ' + CreateSysTimeIntervalString(state);
+    TimeString = rlp->traceTimeString;
 
     if (state.dataRuntimeLang->OutputFullEMSTrace || (state.dataRuntimeLang->OutputEMSErrors && (ReturnValue.Type == Value::Error))) {
-        print(state.files.edd, "{},Line {},{},{},{}\n", NameString, LineNumString, LineString, cValueString, TimeString);
+        // Same characters as print(edd, "{},Line {},{},{},{}\n", ...) without going through std::format
+        std::string record;
+        record.reserve(NameString.size() + LineNumString.size() + LineString.size() + cValueString.size() + TimeString.size() + 12);
+        record += NameString;
+        record += ",Line ";
+        record += LineNumString;
+        record += ',';
+        record += LineString;
+        record += ',';
+        record += cValueString;
+        record += ',';
+        record += TimeString;
+        record += '\n';
+        state.files.edd.write(record);
     }
 
     if (seriousErrorFound) { // throw EnergyPlus severe then fatal
