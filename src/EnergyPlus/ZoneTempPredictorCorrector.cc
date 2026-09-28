@@ -93,6 +93,7 @@
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/PoweredInductionUnits.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/RoomAirModelAirflowNetwork.hh>
@@ -103,7 +104,6 @@
 #include <EnergyPlus/WeatherManager.hh>
 #include <EnergyPlus/ZonePlenum.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::ZoneTempPredictorCorrector {
 

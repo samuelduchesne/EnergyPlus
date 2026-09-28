@@ -89,6 +89,7 @@
 #include <EnergyPlus/OutAirNodeManager.hh>
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Plant/DataPlant.hh>
 #include <EnergyPlus/Plant/PlantManager.hh>
 #include <EnergyPlus/PlantCondLoopOperation.hh>
@@ -108,7 +109,6 @@
 #include <EnergyPlus/ZoneContaminantPredictorCorrector.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::HVACManager {
 

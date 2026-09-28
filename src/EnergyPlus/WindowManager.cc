@@ -69,6 +69,7 @@
 #include <EnergyPlus/DataWindowEquivalentLayer.hh>
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/Material.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WindowComplexManager.hh>
@@ -78,7 +79,6 @@
 #include <EnergyPlus/WindowManagerExteriorThermal.hh>
 #include <EnergyPlus/WindowModel.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 

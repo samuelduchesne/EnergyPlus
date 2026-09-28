@@ -219,11 +219,11 @@
 #include <EnergyPlus/OutputReportTabularAnnual.hh>
 #include <EnergyPlus/OutputReports.hh>
 #include <EnergyPlus/OutsideEnergySources.hh>
-#include <EnergyPlus/Parallel.hh>
 #include <EnergyPlus/PVWatts.hh>
 #include <EnergyPlus/PackagedThermalStorageCoil.hh>
-#include <EnergyPlus/PhaseChangeModeling/HysteresisModel.hh>
+#include <EnergyPlus/Parallel.hh>
 #include <EnergyPlus/PerformanceTimers.hh>
+#include <EnergyPlus/PhaseChangeModeling/HysteresisModel.hh>
 #include <EnergyPlus/PhotovoltaicThermalCollectors.hh>
 #include <EnergyPlus/Photovoltaics.hh>
 #include <EnergyPlus/PipeHeatTransfer.hh>

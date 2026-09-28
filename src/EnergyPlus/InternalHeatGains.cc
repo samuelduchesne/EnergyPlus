@@ -95,6 +95,7 @@
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/PipeHeatTransfer.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/RefrigeratedCase.hh>
@@ -106,7 +107,6 @@
 #include <EnergyPlus/WaterUse.hh>
 #include <EnergyPlus/ZonePlenum.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 

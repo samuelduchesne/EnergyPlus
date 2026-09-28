@@ -113,6 +113,7 @@
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Photovoltaics.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/ScheduleManager.hh>
@@ -128,7 +129,6 @@
 #include <EnergyPlus/WindowManagerExteriorData.hh>
 #include <EnergyPlus/WindowManagerExteriorThermal.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::HeatBalanceSurfaceManager {
 
@@ -7346,7 +7346,8 @@ void CalcHeatBalanceOutsideSurf(EnergyPlusData &state,
             state, state.dataHeatBalSurf->SurfInsideTempHist(1), 0, state.dataHeatBalSurf->SurfQdotRadNetLWInPerArea, ZoneToResimulate, Outside);
     } else if (!HeatBalanceIntRadExchange::OutsideCallRepeatsMainCall(state)) {
         // The "Main" call in InitSurfaceHeatBalance computed this exchange from the same surface temperatures a
-        // moment ago; it is repeated here only when a shading or emissivity state changed since (daylighting).
+        // moment ago; it is repeated here only when one of its recorded inputs changed since (daylighting shading
+        // controls, EMS construction switches).
         HeatBalanceIntRadExchange::CalcInteriorRadExchange(
             state, state.dataHeatBalSurf->SurfInsideTempHist(1), 0, state.dataHeatBalSurf->SurfQdotRadNetLWInPerArea, _, Outside);
     }
@@ -9624,7 +9625,8 @@ void sumSurfQdotRadHVAC(EnergyPlusData &state)
     }
 }
 
-void TestSurfTempCalcHeatBalanceInsideSurf(EnergyPlusData &state, Real64 TH12, int const SurfNum, DataHeatBalance::ZoneData &zone, int &WarmupSurfTemp)
+void TestSurfTempCalcHeatBalanceInsideSurf(
+    EnergyPlusData &state, Real64 TH12, int const SurfNum, DataHeatBalance::ZoneData &zone, int &WarmupSurfTemp)
 {
     std::string surfName = state.dataSurface->Surface(SurfNum).Name;
 

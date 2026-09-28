@@ -103,6 +103,7 @@
 #include <EnergyPlus/OutAirNodeManager.hh>
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/SimAirServingZones.hh>
 #include <EnergyPlus/SizingManager.hh>
@@ -114,7 +115,6 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WaterCoils.hh>
 #include <EnergyPlus/ZonePlenum.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SimAirServingZones {
 

@@ -48,10 +48,14 @@ def weather_for(idf: Path) -> Path:
     """Look up the weather file mapped to an IDF in testfiles/CMakeLists.txt, else Chicago."""
     cmake = REPO / "testfiles" / "CMakeLists.txt"
     if cmake.exists():
-        pat = re.compile(r'ADD_SIMULATION_TEST\(IDF_FILE\s+(\S+)\s+EPW_FILE\s+(\S+)')
+        pat = re.compile(r'ADD_SIMULATION_TEST\(IDF_FILE\s+([^\s)]+)\s+EPW_FILE\s+([^\s)]+)', re.IGNORECASE)
         for m in pat.finditer(cmake.read_text(errors="replace")):
             if Path(m.group(1)).name == idf.name:
-                return REPO / "weather" / m.group(2)
+                epw = REPO / "weather" / m.group(2)
+                if epw.exists():
+                    return epw
+                print(f"note: {idf.name} is mapped to {epw.name}, which is not in weather/; using {DEFAULT_EPW.name}")
+                return DEFAULT_EPW
     return DEFAULT_EPW
 
 
@@ -213,8 +217,11 @@ def main() -> int:
     for row in rows:
         print(f"{row['idf'][:40]:40s} {row['build']:12s} {row['threads']:3d} {row['wall_median_s']:9.2f} {'yes' if row['outputs_match_reference'] else 'NO':>5s}")
     print(f"\nResults: {csv_path}")
+    all_completed = all(row["completed"] for row in rows)
+    if not all_completed:
+        print("SOME RUNS FAILED (see above); a comparison of failed runs proves nothing.")
     print("All compared outputs identical across builds and thread counts." if identical else "OUTPUT DIFFERENCES FOUND (see above).")
-    return 0 if identical else 1
+    return 0 if identical and all_completed else 1
 
 
 if __name__ == "__main__":

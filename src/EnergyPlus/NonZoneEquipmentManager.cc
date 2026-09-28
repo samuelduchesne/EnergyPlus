@@ -50,9 +50,9 @@
 #include <EnergyPlus/DataGlobals.hh>
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/NonZoneEquipmentManager.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/WaterThermalTanks.hh>
 #include <EnergyPlus/WaterUse.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 

@@ -47,10 +47,10 @@
 
 // C++ Headers
 #include <algorithm>
-#include <cstring>
-#include <charconv>
 #include <array>
 #include <cassert>
+#include <charconv>
+#include <cstring>
 #include <format>
 #include <memory>
 #include <string>
@@ -77,11 +77,11 @@
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/ResultsFramework.hh>
 #include <EnergyPlus/SQLiteProcedures.hh>
 #include <EnergyPlus/ScheduleManager.hh>
 #include <EnergyPlus/UtilityRoutines.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 // Local Headers
 #include "re2/re2.h"

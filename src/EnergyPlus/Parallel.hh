@@ -49,7 +49,10 @@
 #define Parallel_hh_INCLUDED
 
 // C++ Headers
+#include <algorithm>
 #include <atomic>
+#include <cassert>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
@@ -104,54 +107,64 @@ namespace Parallel {
             dispatch([](void *ctx, int tid) { (*static_cast<Fn *>(ctx))(tid); }, static_cast<void *>(&fn));
         }
 
-        // Runs fn(i, tid) for i in [begin, end) with a static contiguous partition over the threads.
-        template <typename F> void parallelFor(int begin, int end, F &&fn)
-        {
-            int const n = end - begin;
-            if (n <= 0) {
-                return;
-            }
-            if (numThreads_ == 1 || n == 1) {
-                for (int i = begin; i < end; ++i) {
-                    fn(i, 0);
-                }
-                return;
-            }
-            int const T = numThreads_;
-            runOnAll([&](int tid) {
-                int const lo = begin + static_cast<int>((static_cast<long long>(n) * tid) / T);
-                int const hi = begin + static_cast<int>((static_cast<long long>(n) * (tid + 1)) / T);
-                for (int i = lo; i < hi; ++i) {
-                    fn(i, tid);
-                }
-            });
-        }
-
         // Runs fn(chunkBegin, chunkEnd, tid) with explicit chunk boundaries (bounds.size() == numThreads + 1),
         // typically produced by balancedBounds so that unequal item costs are spread evenly.
         template <typename F> void parallelChunks(std::vector<int> const &bounds, F &&fn)
         {
+            assert(static_cast<int>(bounds.size()) == numThreads_ + 1);
             runOnAll([&](int tid) { fn(bounds[tid], bounds[tid + 1], tid); });
         }
 
-        // Splits [begin, end) into numThreads contiguous chunks of roughly equal summed cost(i).
+        // Splits [begin, end) into at most numThreads contiguous chunks so that the largest summed cost(i) of a chunk
+        // is as small as possible (the chunk that finishes last bounds the region's time). The optimum is found by
+        // bisection on the per-chunk limit; packing items for a given limit is greedy and exact. Trailing chunks
+        // that are not needed are empty. Intended to be called once per thread count, not per region.
         template <typename CostFn> std::vector<int> balancedBounds(int begin, int end, CostFn &&cost) const
         {
-            std::vector<int> bounds(numThreads_ + 1, end);
-            bounds[0] = begin;
+            int const n = std::max(0, end - begin);
+            std::vector<double> costs(n);
             double total = 0.0;
-            for (int i = begin; i < end; ++i) {
-                total += cost(i);
+            double maxCost = 0.0;
+            for (int i = 0; i < n; ++i) {
+                costs[i] = cost(begin + i);
+                total += costs[i];
+                maxCost = std::max(maxCost, costs[i]);
             }
-            double const target = total / numThreads_;
-            double acc = 0.0;
-            int chunk = 1;
-            for (int i = begin; i < end && chunk < numThreads_; ++i) {
-                acc += cost(i);
-                if (acc >= target * chunk) {
-                    bounds[chunk++] = i + 1;
+            // Packs the items into chunks whose cost does not exceed limit; false when that takes more than numThreads chunks.
+            auto pack = [&](double const limit, std::vector<int> *bounds) -> bool {
+                if (bounds != nullptr) {
+                    bounds->assign(numThreads_ + 1, end);
+                    (*bounds)[0] = begin;
+                }
+                int chunk = 1;
+                double acc = 0.0;
+                for (int i = 0; i < n; ++i) {
+                    if (acc + costs[i] > limit && acc > 0.0) { // start a new chunk before item i
+                        if (chunk >= numThreads_) {
+                            return false;
+                        }
+                        if (bounds != nullptr) {
+                            (*bounds)[chunk] = begin + i;
+                        }
+                        ++chunk;
+                        acc = 0.0;
+                    }
+                    acc += costs[i];
+                }
+                return true;
+            };
+            double lo = maxCost; // no limit below the heaviest item can be feasible
+            double hi = total;   // one chunk always fits
+            for (int iter = 0; iter < 64 && hi - lo > 1.0e-9 * std::max(1.0, total); ++iter) {
+                double const mid = 0.5 * (lo + hi);
+                if (pack(mid, nullptr)) {
+                    hi = mid;
+                } else {
+                    lo = mid;
                 }
             }
+            std::vector<int> bounds;
+            pack(hi, &bounds);
             return bounds;
         }
 
@@ -173,6 +186,50 @@ namespace Parallel {
         std::condition_variable cv_;
         std::mutex exceptionMutex_;
         std::exception_ptr exception_;
+    };
+
+    // Chooses between a serial and a parallel variant of a region. Whether the parallel variant pays for its
+    // fork/join and cold caches depends on the model, the machine and what else is running, so calls are timed
+    // alternately serial and parallel, the faster variant is kept for a while, and the comparison is repeated
+    // periodically. Only the scheduling changes; both variants must compute identical results.
+    //
+    //   bool const parallel = choice.chooseParallel(); // before the region
+    //   ... run the region with the chosen variant ...
+    //   if (choice.recordSample()) { ... a comparison just completed; decision() says which variant won ... }
+    class AdaptiveChoice
+    {
+    public:
+        static constexpr int samplesPerVariant = 64;         // timed calls of each variant per comparison
+        static constexpr int callsBetweenComparisons = 4096; // calls the decision is kept before comparing again
+        static constexpr double requiredGain = 0.9;          // parallel is kept only when it is at least 10% faster
+
+        // Returns true when the next call should run the parallel variant; starts the timer when the call is a sample.
+        bool chooseParallel();
+        // Call after the region. Returns true when this sample completed a comparison and a new decision was made.
+        bool recordSample();
+        // 0 = still measuring, 1 = parallel chosen, -1 = serial chosen
+        int decision() const
+        {
+            return decision_;
+        }
+        double serialSecondsPerCall() const
+        {
+            return serialSeconds_ / samplesPerVariant;
+        }
+        double parallelSecondsPerCall() const
+        {
+            return parallelSeconds_ / samplesPerVariant;
+        }
+        void reset();
+
+    private:
+        int decision_ = 0;
+        int samples_ = 0; // timed samples so far while measuring, or decided calls since the last comparison
+        double serialSeconds_ = 0.0;
+        double parallelSeconds_ = 0.0;
+        bool timing_ = false;   // the call chosen last is a timed sample
+        bool parallel_ = false; // the variant chosen last
+        std::chrono::steady_clock::time_point start_;
     };
 
     // Creates the pool for this state from dataGlobal->numThread (set by --threads / -j, or

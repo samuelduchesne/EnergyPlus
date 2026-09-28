@@ -77,6 +77,7 @@
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/PVWatts.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Photovoltaics.hh>
 #include <EnergyPlus/Plant/DataPlant.hh>
 #include <EnergyPlus/Plant/PlantLocation.hh>
@@ -85,7 +86,6 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WindTurbine.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 #ifdef DEBUG_ARITHM_GCC_OR_CLANG
 #    include <EnergyPlus/fenv_missing.h>
 #endif

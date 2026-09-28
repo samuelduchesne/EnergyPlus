@@ -99,6 +99,7 @@
 #include <EnergyPlus/OutputReportTabular.hh>
 #include <EnergyPlus/OutsideEnergySources.hh>
 #include <EnergyPlus/PCMThermalStorage.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/PhotovoltaicThermalCollectors.hh>
 #include <EnergyPlus/PipeHeatTransfer.hh>
 #include <EnergyPlus/Pipes.hh>
@@ -124,7 +125,6 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WaterThermalTanks.hh>
 #include <EnergyPlus/WaterUse.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::PlantManager {
 

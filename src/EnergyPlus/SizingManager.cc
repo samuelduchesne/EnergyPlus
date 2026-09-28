@@ -72,6 +72,7 @@
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/PoweredInductionUnits.hh>
 #include <EnergyPlus/SQLiteProcedures.hh>
 #include <EnergyPlus/ScheduleManager.hh>
@@ -81,7 +82,6 @@
 #include <EnergyPlus/UtilityRoutines.hh>
 #include <EnergyPlus/WeatherManager.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SizingManager {
 

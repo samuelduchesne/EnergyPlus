@@ -215,8 +215,10 @@ def main() -> int:
     text = enable_runperiod_simulation(args.idf.read_text(errors="replace"))
     if args.shading_update_days is not None:
         text = set_shading_update_days(text, args.shading_update_days)
-    fields = strip_comments(RUNPERIOD_RE.search(text).group(0))
-    run_period_name = fields[1]
+    run_period_match = RUNPERIOD_RE.search(text)
+    if run_period_match is None:
+        raise SystemExit(f"{args.idf} has no RunPeriod object")
+    run_period_name = strip_comments(run_period_match.group(0))[1]
 
     # Reference: full year, same fixed year and the same added outputs
     ref_text = rewrite_runperiod(text, (1, 1), (12, 31), args.year) + ADDED_OUTPUTS
@@ -249,8 +251,10 @@ def main() -> int:
     ref = parse_eso(args.out / "reference" / "eplusout.eso", run_period_name)
     report = {"model": args.idf.name, "chunks": [], "runs": results, "wall_all_jobs_s": wall_total}
     print(f"\n{'chunk':14s} {'overlap maxΔT':>13s} {'body maxΔT':>10s} {'body p99ΔT':>10s} {'body meanΔT':>11s}  {'elec total':>10s} {'gas total':>10s} {'elec hourly max':>15s}")
+    # Each chunk's ESO is parsed once and reused for the per-chunk comparison and the annual totals below
+    chunk_data = {c["name"]: parse_eso(args.out / c["name"] / "eplusout.eso", run_period_name) for c in chunks}
     for c in chunks:
-        cd = parse_eso(args.out / c["name"] / "eplusout.eso", run_period_name)
+        cd = chunk_data[c["name"]]
         entry = dict(c)
         if c["run_begin"] != c["body_begin"]:
             ob_end = (c["body_begin"][0] - 1, calendar.monthrange(args.year, c["body_begin"][0] - 1)[1])
@@ -271,8 +275,7 @@ def main() -> int:
         ref_total = sum(rs.values())
         chunk_total = 0.0
         for c in chunks:
-            cd = parse_eso(args.out / c["name"] / "eplusout.eso", run_period_name)
-            for (m, d, h), v in cd.get(("", var), {}).items():
+            for (m, d, h), v in chunk_data[c["name"]].get(("", var), {}).items():
                 if in_range((m, d), c["body_begin"], c["body_end"]):
                     chunk_total += v
         if ref_total:

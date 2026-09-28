@@ -87,6 +87,7 @@
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/PluginManager.hh>
 #include <EnergyPlus/ScheduleManager.hh>
 #include <EnergyPlus/SolarReflectionManager.hh>
@@ -99,7 +100,6 @@
 #include <EnergyPlus/WindowManagerExteriorData.hh>
 #include <EnergyPlus/WindowModel.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus::SolarShading {
 

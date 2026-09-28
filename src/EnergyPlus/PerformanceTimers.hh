@@ -190,7 +190,12 @@ struct PerfTimerData : BaseGlobalStruct
 
     void clear_state() override
     {
-        new (this) PerfTimerData();
+        processStart = Clock::now();
+        inclusive.fill(0.0);
+        exclusive.fill(0.0);
+        calls.fill(0);
+        items.fill(0);
+        childStack.clear();
     }
 };
 

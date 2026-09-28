@@ -60,17 +60,46 @@
 
 #include <ObjexxFCL/Optional.hh>
 
+#include <utility>
+
 namespace EnergyPlus {
 
 // Read-only view of a sizing array owned by EnergyPlusData. BaseSizer::initializeWithinEP used to copy the
 // FinalZoneSizing, TermUnitFinalZoneSizing and FinalSysSizing vectors into every sizer on every call; on a
 // sizing-heavy run those copies (each element carries several timestep-long arrays) were 3-4% of all
 // instructions. Sizers only read these, so the view points at the state vectors instead. A sizer that is
-// initialized outside EnergyPlus (initializeFromAPI) allocates its own storage through allocate().
+// initialized outside EnergyPlus (initializeFromAPI) allocates its own storage through allocate(); a copy or
+// move of such a view keeps pointing at its own storage, not at the source's.
 template <typename T> class SizingDataView
 {
 public:
     using size_type = typename EPVector<T>::size_type;
+
+    SizingDataView() = default;
+    SizingDataView(SizingDataView const &other) : m_owned(other.m_owned)
+    {
+        rebindFrom(other);
+    }
+    SizingDataView(SizingDataView &&other) noexcept : m_owned(std::move(other.m_owned))
+    {
+        rebindFrom(other);
+    }
+    SizingDataView &operator=(SizingDataView const &other)
+    {
+        if (this != &other) {
+            m_owned = other.m_owned;
+            rebindFrom(other);
+        }
+        return *this;
+    }
+    SizingDataView &operator=(SizingDataView &&other) noexcept
+    {
+        if (this != &other) {
+            m_owned = std::move(other.m_owned);
+            rebindFrom(other);
+        }
+        return *this;
+    }
 
     void bind(EPVector<T> &v)
     {
@@ -108,6 +137,11 @@ public:
     }
 
 private:
+    void rebindFrom(SizingDataView const &other)
+    {
+        m_ref = (other.m_ref == &other.m_owned) ? &m_owned : other.m_ref;
+    }
+
     EPVector<T> *m_ref = nullptr;
     EPVector<T> m_owned;
 };

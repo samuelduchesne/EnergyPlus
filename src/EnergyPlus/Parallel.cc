@@ -50,12 +50,12 @@
 #include <chrono>
 
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
-#include <immintrin.h>
-#define EP_CPU_RELAX() _mm_pause()
+#    include <immintrin.h>
+#    define EP_CPU_RELAX() _mm_pause()
 #elif defined(__aarch64__) && !defined(_MSC_VER)
-#define EP_CPU_RELAX() asm volatile("yield" ::: "memory")
+#    define EP_CPU_RELAX() asm volatile("yield" ::: "memory")
 #else
-#define EP_CPU_RELAX() std::this_thread::yield()
+#    define EP_CPU_RELAX() std::this_thread::yield()
 #endif
 
 // EnergyPlus Headers
@@ -173,6 +173,47 @@ void ThreadPool::dispatch(Thunk thunk, void *ctx)
         }
         std::rethrow_exception(e);
     }
+}
+
+bool AdaptiveChoice::chooseParallel()
+{
+    timing_ = false;
+    if (decision_ != 0) {
+        parallel_ = decision_ > 0;
+        if (++samples_ >= callsBetweenComparisons) {
+            reset(); // this call still uses the decision; the next one starts a new comparison
+        }
+        return parallel_;
+    }
+    timing_ = true;
+    parallel_ = (samples_ % 2) == 1;
+    start_ = std::chrono::steady_clock::now();
+    return parallel_;
+}
+
+bool AdaptiveChoice::recordSample()
+{
+    if (!timing_) {
+        return false;
+    }
+    timing_ = false;
+    double const seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count();
+    (parallel_ ? parallelSeconds_ : serialSeconds_) += seconds;
+    if (++samples_ < 2 * samplesPerVariant) {
+        return false;
+    }
+    decision_ = (parallelSeconds_ < requiredGain * serialSeconds_) ? 1 : -1;
+    samples_ = 0;
+    return true;
+}
+
+void AdaptiveChoice::reset()
+{
+    decision_ = 0;
+    samples_ = 0;
+    serialSeconds_ = 0.0;
+    parallelSeconds_ = 0.0;
+    timing_ = false;
 }
 
 void initialize(EnergyPlusData &state)

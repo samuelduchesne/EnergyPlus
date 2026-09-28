@@ -78,6 +78,7 @@
 #include <EnergyPlus/OutputProcessor.hh>
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Psychrometrics.hh>
 #include <EnergyPlus/ScheduleManager.hh>
 #include <EnergyPlus/StringUtilities.hh>
@@ -87,7 +88,6 @@
 #include <EnergyPlus/Vectors.hh>
 #include <EnergyPlus/WaterManager.hh>
 #include <EnergyPlus/WeatherManager.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 
 namespace EnergyPlus {
 

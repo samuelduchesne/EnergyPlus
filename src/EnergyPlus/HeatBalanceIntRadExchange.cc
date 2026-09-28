@@ -47,7 +47,6 @@
 
 // C++ Headers
 #include <algorithm>
-#include <chrono>
 #include <cassert>
 #include <cmath>
 #include <format>
@@ -72,10 +71,10 @@
 #include <EnergyPlus/HeatBalanceIntRadExchange.hh>
 #include <EnergyPlus/InputProcessing/InputProcessor.hh>
 #include <EnergyPlus/Material.hh>
-#include <EnergyPlus/UtilityRoutines.hh>
-#include <EnergyPlus/WindowEquivalentLayer.hh>
 #include <EnergyPlus/Parallel.hh>
 #include <EnergyPlus/PerformanceTimers.hh>
+#include <EnergyPlus/UtilityRoutines.hh>
+#include <EnergyPlus/WindowEquivalentLayer.hh>
 
 namespace EnergyPlus {
 
@@ -276,7 +275,6 @@ namespace HeatBalanceIntRadExchange {
                         zone_info.ScriptF *= Constant::StefanBoltzmann;
                     }
                 }
-
             }
         } // End of check if SurfIterations = 0
 
@@ -446,9 +444,7 @@ namespace HeatBalanceIntRadExchange {
                 totalCost += cost(e);
             }
             d.enclosureChunkBounds.clear();
-            d.parallelDecision = 0;
-            d.decisionSamples = 0;
-            d.serialSeconds = d.parallelSeconds = 0.0;
+            d.parallelChoice.reset();
             if (numThreads > 1 && nEncl > 1 && totalCost >= minCostForParallel) {
                 d.enclosureChunkBounds = Parallel::pool(state).balancedBounds(1, nEncl + 1, cost);
             }
@@ -456,30 +452,10 @@ namespace HeatBalanceIntRadExchange {
         }
 
         // Whether the parallel phase pays for its fork/join and cold caches depends on the model, the machine and
-        // what else is running, so full calls are timed alternately serial and parallel, the faster variant is kept
-        // for a while, and the comparison is repeated periodically. Only the scheduling changes; both variants
-        // compute identical results.
-        constexpr int samplesPerVariant = 64;
-        constexpr int callsBetweenComparisons = 4096;
-        bool runParallel = false;
-        bool timeThisCall = false;
-        if (!PartialResimulate && !d.enclosureChunkBounds.empty()) {
-            if (d.parallelDecision != 0) {
-                runParallel = d.parallelDecision > 0;
-                if (++d.decisionSamples >= 2 * samplesPerVariant + callsBetweenComparisons) {
-                    d.parallelDecision = 0;
-                    d.decisionSamples = 0;
-                    d.serialSeconds = d.parallelSeconds = 0.0;
-                }
-            } else {
-                timeThisCall = true;
-                runParallel = (d.decisionSamples % 2) == 1;
-            }
-        }
-        std::chrono::steady_clock::time_point phase2Start;
-        if (timeThisCall) {
-            phase2Start = std::chrono::steady_clock::now();
-        }
+        // what else is running; Parallel::AdaptiveChoice times full calls alternately serial and parallel and keeps
+        // the faster variant. Only the scheduling changes; both variants compute identical results.
+        bool const adaptive = !PartialResimulate && !d.enclosureChunkBounds.empty();
+        bool const runParallel = adaptive && d.parallelChoice.chooseParallel();
 
         if (runParallel) {
             Parallel::pool(state).parallelChunks(d.enclosureChunkBounds, [&](int const chunkBegin, int const chunkEnd, int const tid) {
@@ -493,20 +469,12 @@ namespace HeatBalanceIntRadExchange {
             }
         }
 
-        if (timeThisCall) {
-            constexpr double requiredGain = 0.9; // keep the parallel variant only when it is at least 10% faster
-            double const seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - phase2Start).count();
-            (runParallel ? d.parallelSeconds : d.serialSeconds) += seconds;
-            if (++d.decisionSamples >= 2 * samplesPerVariant) {
-                d.parallelDecision = (d.parallelSeconds < requiredGain * d.serialSeconds) ? 1 : -1;
-                if (state.dataSysVars->DeveloperFlag) {
-                    DisplayString(state,
-                                  std::format(" Interior radiant exchange: serial {:.1f} us/call, parallel {:.1f} us/call, using {}",
-                                              1.0e6 * d.serialSeconds / samplesPerVariant,
-                                              1.0e6 * d.parallelSeconds / samplesPerVariant,
-                                              d.parallelDecision > 0 ? "parallel" : "serial"));
-                }
-            }
+        if (adaptive && d.parallelChoice.recordSample() && state.dataSysVars->DeveloperFlag) {
+            DisplayString(state,
+                          std::format(" Interior radiant exchange: serial {:.1f} us/call, parallel {:.1f} us/call, using {}",
+                                      1.0e6 * d.parallelChoice.serialSecondsPerCall(),
+                                      1.0e6 * d.parallelChoice.parallelSecondsPerCall(),
+                                      d.parallelChoice.decision() > 0 ? "parallel" : "serial"));
         }
 
         // Automatic Surface Multipliers: Update values of surfaces not simulated
@@ -523,21 +491,31 @@ namespace HeatBalanceIntRadExchange {
 
     void RecordMainCallState(EnergyPlusData &state)
     {
-        // Between the "Main" call (InitSurfaceHeatBalance) and the "Outside" call (CalcHeatBalanceOutsideSurf) of a
-        // zone timestep, nothing changes the surface temperatures passed in (SurfInsideTempHist(1)), the movable
-        // insulation state, the previous-timestep shade flags, the window effective inside temperatures or the
-        // glass face temperatures: those are written before the "Main" call or in the inside heat balance after
-        // the "Outside" call. Daylighting controls (manageDaylighting) run in between and can change
-        // SurfWinShadingFlag, on which the emissivities, the ScriptF recalculation and the choice of window
-        // radiating temperature depend, so the shade flags are recorded here and compared before skipping.
-        // SurfAbsThermalInt is recorded as well as a guard against future writers between the two calls.
+        // The full "Outside" call (CalcHeatBalanceOutsideSurf) of a zone timestep recomputes what the full "Main"
+        // call (InitSurfaceHeatBalance) computed a moment earlier unless one of its inputs changed in between.
+        // Daylighting controls (manageDaylighting) run in between and can change SurfWinShadingFlag, on which the
+        // emissivities, the ScriptF recalculation and the choice of window radiating temperature depend. The shade
+        // flags are recorded here and compared in OutsideCallRepeatsMainCall; the construction index, the inside
+        // thermal absorptance, the window effective inside temperature and the surface temperature history are
+        // recorded as well, so that a writer added between the two calls cannot silently make the skip wrong. The
+        // remaining inputs (glass face temperatures, effective shade emissivities, movable insulation state) are
+        // written only by the inside heat balance after the "Outside" call or before the "Main" call.
         auto &d = *state.dataHeatBalIntRadExchg;
         auto const &htSurfs = state.dataSurface->AllHTSurfaceList;
-        d.shadeFlagAtMain.resize(htSurfs.size());
-        d.absThermalIntAtMain.resize(htSurfs.size());
-        for (size_t i = 0; i < htSurfs.size(); ++i) {
-            d.shadeFlagAtMain[i] = static_cast<int>(state.dataSurface->SurfWinShadingFlag(htSurfs[i]));
-            d.absThermalIntAtMain[i] = state.dataHeatBalSurf->SurfAbsThermalInt(htSurfs[i]);
+        auto const &insideTemp = state.dataHeatBalSurf->SurfInsideTempHist(1);
+        size_t const n = htSurfs.size();
+        d.shadeFlagAtMain.resize(n);
+        d.constructionAtMain.resize(n);
+        d.absThermalIntAtMain.resize(n);
+        d.effInsSurfTempAtMain.resize(n);
+        d.insideTempAtMain.resize(n);
+        for (size_t i = 0; i < n; ++i) {
+            int const surfNum = htSurfs[i];
+            d.shadeFlagAtMain[i] = static_cast<int>(state.dataSurface->SurfWinShadingFlag(surfNum));
+            d.constructionAtMain[i] = state.dataSurface->Surface(surfNum).Construction;
+            d.absThermalIntAtMain[i] = state.dataHeatBalSurf->SurfAbsThermalInt(surfNum);
+            d.effInsSurfTempAtMain[i] = state.dataSurface->SurfWinEffInsSurfTemp(surfNum);
+            d.insideTempAtMain[i] = insideTemp(surfNum);
         }
         d.mainCallValid = true;
     }
@@ -550,12 +528,17 @@ namespace HeatBalanceIntRadExchange {
         }
         d.mainCallValid = false;
         auto const &htSurfs = state.dataSurface->AllHTSurfaceList;
-        if (d.shadeFlagAtMain.size() != htSurfs.size() || d.absThermalIntAtMain.size() != htSurfs.size()) {
+        size_t const n = htSurfs.size();
+        if (d.shadeFlagAtMain.size() != n) { // all records are resized together in RecordMainCallState
             return false;
         }
-        for (size_t i = 0; i < htSurfs.size(); ++i) {
-            if (d.shadeFlagAtMain[i] != static_cast<int>(state.dataSurface->SurfWinShadingFlag(htSurfs[i])) ||
-                d.absThermalIntAtMain[i] != state.dataHeatBalSurf->SurfAbsThermalInt(htSurfs[i])) {
+        auto const &insideTemp = state.dataHeatBalSurf->SurfInsideTempHist(1);
+        for (size_t i = 0; i < n; ++i) {
+            int const surfNum = htSurfs[i];
+            if (d.shadeFlagAtMain[i] != static_cast<int>(state.dataSurface->SurfWinShadingFlag(surfNum)) ||
+                d.constructionAtMain[i] != state.dataSurface->Surface(surfNum).Construction ||
+                d.absThermalIntAtMain[i] != state.dataHeatBalSurf->SurfAbsThermalInt(surfNum) ||
+                d.effInsSurfTempAtMain[i] != state.dataSurface->SurfWinEffInsSurfTemp(surfNum) || d.insideTempAtMain[i] != insideTemp(surfNum)) {
                 return false;
             }
         }

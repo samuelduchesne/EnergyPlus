@@ -46,9 +46,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 // C++ Headers
+#include <array>
 #include <ios>
 #include <memory>
-#include <array>
 #include <sstream>
 #include <stdexcept>
 

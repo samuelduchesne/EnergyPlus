@@ -60,6 +60,7 @@
 // EnergyPlus Headers
 #include <EnergyPlus/Data/BaseData.hh>
 #include <EnergyPlus/EnergyPlus.hh>
+#include <EnergyPlus/Parallel.hh>
 
 namespace EnergyPlus {
 
@@ -190,18 +191,19 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
     bool ViewFactorReport = false; // Flag to output view factor report in eio file
     int LargestSurf = 0;
 
-    // Skipping the "Outside" call when it would repeat the "Main" call of the same timestep
-    bool mainCallValid = false;              // true between the full "Main" call and the full "Outside" call of a zone timestep
-    std::vector<int> shadeFlagAtMain;        // SurfWinShadingFlag of every heat transfer window at the "Main" call
-    std::vector<Real64> absThermalIntAtMain; // SurfAbsThermalInt of every heat transfer surface at the "Main" call
+    // Skipping the "Outside" call when it would repeat the "Main" call of the same timestep: the inputs of the
+    // "Main" call that are recorded and compared, one entry per surface of AllHTSurfaceList
+    bool mainCallValid = false;               // true between the full "Main" call and the full "Outside" call of a zone timestep
+    std::vector<int> shadeFlagAtMain;         // SurfWinShadingFlag
+    std::vector<int> constructionAtMain;      // Surface(...).Construction (EMS and thermochromic construction switches)
+    std::vector<Real64> absThermalIntAtMain;  // SurfAbsThermalInt
+    std::vector<Real64> effInsSurfTempAtMain; // SurfWinEffInsSurfTemp (radiating temperature of shaded, BSDF and EQL windows)
+    std::vector<Real64> insideTempAtMain;     // SurfInsideTempHist(1) (radiating temperature of all other surfaces)
 
-    // Parallel radiant exchange: per-thread scratch and cost-balanced enclosure chunks
-    int chunkBoundsThreads = 0;            // thread count the chunk bounds were computed for
-    std::vector<int> enclosureChunkBounds; // numThreads + 1 enclosure boundaries covering all enclosures
-    int parallelDecision = 0;              // 0 = still measuring, 1 = run the exchange in parallel, -1 = run it serially
-    int decisionSamples = 0;               // timed full calls so far (alternating serial and parallel)
-    double serialSeconds = 0.0;            // summed phase-2 time of the serial samples
-    double parallelSeconds = 0.0;          // summed phase-2 time of the parallel samples
+    // Parallel radiant exchange: per-thread scratch, cost-balanced enclosure chunks and the serial/parallel choice
+    int chunkBoundsThreads = 0;              // thread count the chunk bounds were computed for
+    std::vector<int> enclosureChunkBounds;   // numThreads + 1 enclosure boundaries covering all enclosures
+    Parallel::AdaptiveChoice parallelChoice; // times the exchange serially and in parallel and keeps the faster variant
     std::vector<std::vector<Real64>> threadTempRad;
     std::vector<std::vector<Real64>> threadTempInKto4th;
     std::vector<std::vector<Real64>> threadEmiss;
@@ -223,13 +225,13 @@ struct HeatBalanceIntRadExchgData : BaseGlobalStruct
         this->LargestSurf = 0;
         this->mainCallValid = false;
         this->shadeFlagAtMain.clear();
+        this->constructionAtMain.clear();
         this->absThermalIntAtMain.clear();
+        this->effInsSurfTempAtMain.clear();
+        this->insideTempAtMain.clear();
         this->chunkBoundsThreads = 0;
         this->enclosureChunkBounds.clear();
-        this->parallelDecision = 0;
-        this->decisionSamples = 0;
-        this->serialSeconds = 0.0;
-        this->parallelSeconds = 0.0;
+        this->parallelChoice.reset();
         this->threadTempRad.clear();
         this->threadTempInKto4th.clear();
         this->threadEmiss.clear();

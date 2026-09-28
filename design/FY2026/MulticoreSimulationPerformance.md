@@ -784,6 +784,15 @@ by a per-window flag reset when the return-air gain is recomputed). Identical on
 the last two change results only for models with airflow windows returning to zones without return
 air, or radiant systems re-simulating zones with windows.
 
+The warm-up counter fix deserves a release-note line of its own. Because the counter was never
+incremented, the fatal exit in `TestSurfTempCalcHeatBalanceInsideSurf` for more than 10 out-of-bounds
+surface temperatures during warm-up (3 with enforced view-factor reciprocity) has been unreachable
+since the C++ port, and a model that exceeds that count today completes silently. With the counter
+counting, as the finite-difference path already does, such a model terminates with "Program terminates
+due to preceding conditions". None of the 44 validation models is affected; the full regression suite
+should be run with the fix before release, and any model that newly terminates is a model with a real
+warm-up problem that the message was written for.
+
 ### 13.2 Phase 0 — measurement harness (commit "Add phase timers, --threads plumbing and a benchmark runner") ###
 
  - `Perf::ScopedTimer` in 29 entry points plus the AirflowNetwork calls; inclusive/exclusive seconds,
@@ -804,9 +813,10 @@ fork/join pool must never be oversubscribed.
 
 ### 13.3 Phase 1 — items 5.3.1 and 5.3.2 ###
 
-Skipping the repeated "Outside" `CalcInteriorRadExchange` (the "Main" call records the shading flags
-and inside thermal absorptances of all heat transfer surfaces; the full "Outside" call is skipped
-when they are unchanged, and a zone re-simulation is never skipped) and removing the per-iteration
+Skipping the repeated "Outside" `CalcInteriorRadExchange` (the "Main" call records the shading flags,
+construction indices, inside thermal absorptances, window effective inside temperatures and the
+surface temperature history of all heat transfer surfaces; the full "Outside" call is skipped when
+none of them changed, and a zone re-simulation is never skipped) and removing the per-iteration
 whole-array copies and the per-call heap allocation of the radiation temperature array are both
 identical on the validation set. Wall time, true `e2fd2334` baseline → all commits of this log
 through 13.7 (Phase 0–1, the pilot at `--threads 1`, and the latency items of 13.5), measured on
@@ -876,8 +886,8 @@ Three findings, all of which change the plan for Phases 2 and 3:
    a block time short enough to park the workers (1 ms) makes every timestep pay a 15–45 µs wake-up
    instead. Recommendation: `--threads` ≤ physical cores − 1 on shared machines, and the default
    stays 1 until Phase 3 regions exist.
-3. **Adaptive scheduling is necessary.** The code times the first 64 full calls alternately serial and
-   parallel, keeps the faster variant for 4096 calls, then re-compares. With this the radiant-exchange
+3. **Adaptive scheduling is necessary.** `Parallel::AdaptiveChoice` times the first 64 full calls
+   alternately serial and parallel, keeps the faster variant for 4096 calls, then re-compares. With this the radiant-exchange
    timer is never more than noise above serial at any thread count, and results are unaffected
    (scheduling only). The early decision was wrong for the hospital (sizing-period samples chose
    parallel; the run as a whole was slower) until the periodic re-comparison was added.
@@ -933,6 +943,31 @@ Measured with a one-week `ASHRAE901_OutPatientHealthCare` run under callgrind (4
 Link-time optimization (`-flto=auto`, new `ENABLE_LTO` CMake option, off by default): identical
 outputs on the three benchmark models; design-day wall time −0.3% (`HospitalBaseline`), −3.1%
 (`OutPatient`), −5.4% (`45zonevav`), median of 3.
+
+### 13.5a Review pass over the branch ###
+
+A review of the whole branch against `develop` led to these changes, all scheduling, harness or
+robustness fixes with no effect on results (identical on the 11-model and 44-model sets):
+
+ - `ThreadPool::balancedBounds` now computes the exact minimax contiguous partition (bisection on
+   the per-chunk cost limit with greedy packing) instead of closing a chunk once its cost crossed
+   the average, which put a heavy enclosure at a boundary into the previous chunk and left later
+   threads idle. Unused trailing chunks are empty. The unused `parallelFor` is removed and
+   `parallelChunks` asserts the bounds size.
+ - The serial/parallel A/B state machine moved out of the radiant-exchange routine into
+   `Parallel::AdaptiveChoice`, so the next parallel region reuses it rather than copying it.
+ - The "Outside" call skip records and compares five inputs per surface (above) instead of two, so
+   a future writer inserted between the two calls makes the skip fall back to recomputing rather
+   than reusing a stale exchange.
+ - `SizingDataView` has explicit copy and move operations that rebind a copy to its own storage;
+   the implicit ones left a copy of an API-initialized sizer pointing at the source's buffer.
+ - `PerfTimerData::clear_state` resets its members instead of placement-new over a live object.
+ - `bench.py` matches `add_simulation_test` case-insensitively (the CMake list spells it in lower
+   case, so the IDF-to-weather mapping never matched and every model ran with Chicago weather), and
+   its exit status also requires every run to have completed, so two builds that fail identically
+   no longer pass the identity gate. `chunked_run.py` parses each chunk ESO once and reports a
+   missing `RunPeriod` as an error instead of a traceback.
+ - 25 files reformatted to `src/.clang-format`.
 
 ### 13.6 Not yet done ###
 

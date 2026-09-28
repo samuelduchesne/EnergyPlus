@@ -189,6 +189,8 @@ extern "C" {
 #include <EnergyPlus/OutputReportPredefined.hh>
 #include <EnergyPlus/OutputReportTabular.hh>
 #include <EnergyPlus/OutputReports.hh>
+#include <EnergyPlus/Parallel.hh>
+#include <EnergyPlus/PerformanceTimers.hh>
 #include <EnergyPlus/Plant/PlantManager.hh>
 #include <EnergyPlus/PlantPipingSystemsManager.hh>
 #include <EnergyPlus/PluginManager.hh>
@@ -208,8 +210,6 @@ extern "C" {
 #include <EnergyPlus/ZoneContaminantPredictorCorrector.hh>
 #include <EnergyPlus/ZoneEquipmentManager.hh>
 #include <EnergyPlus/ZoneTempPredictorCorrector.hh>
-#include <EnergyPlus/Parallel.hh>
-#include <EnergyPlus/PerformanceTimers.hh>
 namespace EnergyPlus {
 namespace SimulationManager {
 
@@ -243,7 +243,6 @@ namespace SimulationManager {
     void ManageSimulation(EnergyPlusData &state)
     {
         Parallel::initialize(state); // thread pool sized from --threads (default 1)
-
 
         // SUBROUTINE INFORMATION:
         //       AUTHOR         Rick Strand
