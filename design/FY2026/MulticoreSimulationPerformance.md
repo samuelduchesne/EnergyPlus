@@ -928,6 +928,33 @@ environments and can run concurrently, which moves the floor toward 10 s and the
 merging (ESO/MTR concatenation, meter sums, SQLite merge, and the annual tabular reports rebuilt
 from merged meter data, which is the one substantial piece).
 
+**Measured (prototype `scripts/dev/perf/chunked_run.py`, `HospitalBaseline`, 12 monthly chunks and
+4 quarterly chunks, 4 processes at a time on 4 vCPUs, reference year run with the same added
+hourly outputs).**
+
+ - Zone mean air temperature, hourly, every zone, over the chunk bodies: maximum deviation from the
+   full-year run 0.033 K, 99th percentile 0.0005 K, mean below 0.0001 K, against the model's own
+   0.4 K warm-up tolerance. January is bit-identical once the shading calculation period is
+   aligned (see below); the other months carry 6–8 warm-up days plus a 3-day overlap.
+ - Natural gas, cooling and heating energy transfer: monthly totals within ±0.001%, annual totals
+   within 0.0005%.
+ - Electricity: annual −0.034% (monthly chunks) and 0.0000% (quarterly chunks); February −0.6%.
+   The February difference is a single plant pump of about 190 kW that runs continuously in the
+   full-year run from 25 January to 7 February with zero cooling load and does not run in the
+   chunk. A 10-day overlap did not change it (the year-run trajectory is a path-dependent discrete
+   control state, not slow thermal memory), so the overlap check reported it as a 2–6% daily
+   electricity deviation on the overlap days, which is the intended behaviour: the model has two
+   valid trajectories and the tool tells the user which meter and which days disagree. The pump
+   behaviour itself is worth a look as a model or engine quirk.
+ - Alignment matters: with the model's 7-day periodic shading calculation, a chunk whose length is
+   not a multiple of 7 days averages a different shading day at its end than the year run does
+   (January differed by 0.026 K for that reason alone). The orchestrator must start and end chunks
+   on the year run's shading period boundaries, or the comparison run must use daily updates as
+   the prototype does.
+ - Wall time on 4 vCPUs: 4 quarterly chunks 68 s against 178 s for the year (2.6×); 12 monthly
+   chunks in three waves 107 s (1.7×, because each chunk repeats the 16 s of sizing). Per-chunk
+   times were 33–37 s for a month and 60–68 s for a quarter while sharing the machine four ways.
+
 Detected from the input, and either refused or run serially: components with seasonal memory
 (ground heat exchangers with g-function load history, borefields, seasonal storage), EMS or Python
 plugins with persistent state or long trend windows, demand limiting on billing periods that do not
@@ -962,9 +989,10 @@ half; differences at the tolerance level, behind `PerformancePrecisionTradeoffs`
 
 ### 14.4 Revised order of work ###
 
-1. Tier A orchestrator with overlap validation, prototyped against the existing binary on
-   `HospitalBaseline` and `ASHRAE901_OutPatientHealthCare`; the overlap deviations decide whether
-   the warm-up argument holds for those models before any merging code is written.
+1. Tier A orchestrator: the validation half exists (`chunked_run.py`) and the warm-up argument
+   holds on `HospitalBaseline` to 0.03 K and 0.001% on gas and thermal meters. Next: chunk
+   alignment to the shading period, detection of long-memory objects, sizing periods run once and
+   shared, then output merging (ESO/MTR, SQLite, tabular reports from merged meters).
 2. Tier B reporting thread and envelope data layout, which compound with Tier A and never risk a
    result.
 3. Tier C behind input options.
