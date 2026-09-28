@@ -8252,6 +8252,13 @@ void CalcHeatBalanceInsideSurf2(EnergyPlusData &state,
         for (int const surfNum : HTSurfs) {
             state.dataHeatBalSurf->SurfTempInsOld(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
         }
+        // SurfTempInTmpOld is read only for surfaces with interior movable insulation (their damped temperature update
+        // and their convergence check), so the previous-iteration copy is kept for exactly those surfaces.
+        if (state.dataSurface->AnyMovableInsulation) {
+            for (int const surfNum : state.dataSurface->intMovInsulSurfNums) {
+                state.dataHeatBalSurf->SurfTempInTmpOld(surfNum) = state.dataHeatBalSurf->SurfTempInTmp(surfNum);
+            }
+        }
         for (int const surfNum : state.dataSurface->AllHTSurfaceList) {
             surfTempForRadiation(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
         }
@@ -9140,6 +9147,12 @@ void CalcHeatBalanceInsideSurf2CTFOnly(EnergyPlusData &state,
                 for (int surfNum = thisSpace.HTSurfaceFirst; surfNum <= thisSpace.HTSurfaceLast; ++surfNum) {
                     state.dataHeatBalSurf->SurfTempInsOld(surfNum) = state.dataHeatBalSurf->SurfTempIn(surfNum);
                 }
+            }
+        }
+        // SurfTempInTmpOld is read only for surfaces with interior movable insulation (see CalcHeatBalanceInsideSurf2)
+        if (state.dataSurface->AnyMovableInsulation) {
+            for (int const surfNum : state.dataSurface->intMovInsulSurfNums) {
+                state.dataHeatBalSurf->SurfTempInTmpOld(surfNum) = state.dataHeatBalSurf->SurfTempInTmp(surfNum);
             }
         }
 

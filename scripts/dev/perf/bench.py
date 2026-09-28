@@ -55,6 +55,15 @@ def weather_for(idf: Path) -> Path:
     return DEFAULT_EPW
 
 
+def needs_expand_objects(idf: Path) -> bool:
+    """HVACTemplate objects need ExpandObjects (energyplus -x), which must sit next to each executable."""
+    try:
+        with idf.open(errors="replace") as f:
+            return any(line.lstrip().lower().startswith("hvactemplate:") for line in f)
+    except OSError:
+        return False
+
+
 def file_digest(path: Path) -> str:
     if not path.exists():
         return "missing"
@@ -81,9 +90,16 @@ def run_once(exe: Path, idf: Path, epw: Path, outdir: Path, threads: int, mode: 
         cmd += ["--threads", str(threads)]
     if timings:
         cmd.append("--timings")
+    if needs_expand_objects(idf):
+        cmd.append("-x")
     cmd.append(str(idf))
     env = dict(os.environ)
     env.update(extra_env)
+    # Load the shared library that sits next to the executable. The executable's RUNPATH points at the
+    # directory it was built in, so a copied baseline binary would otherwise silently pick up the library
+    # of the current build and every "baseline" comparison would compare the new build against itself.
+    lib_dir = str(exe.resolve().parent)
+    env["LD_LIBRARY_PATH"] = lib_dir + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     t0 = time.perf_counter()
     proc = subprocess.run(cmd, cwd=str(outdir), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     wall = time.perf_counter() - t0
@@ -119,6 +135,16 @@ def main() -> int:
         if not exe:
             ap.error(f"--build needs NAME=EXE, got {spec!r}")
         builds.append((name, Path(exe).resolve()))
+    # Show which shared library each executable will load so that a mis-resolved baseline is visible in the log.
+    for name, exe in builds:
+        env = dict(os.environ)
+        env["LD_LIBRARY_PATH"] = str(exe.parent) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+        try:
+            ldd = subprocess.run(["ldd", str(exe)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env).stdout
+            libs = [line.split("=>")[1].split("(")[0].strip() for line in ldd.splitlines() if "libenergyplusapi" in line and "=>" in line]
+        except OSError:
+            libs = []
+        print(f"build {name}: {exe} -> {', '.join(libs) if libs else 'static or unresolved library'}")
 
     args.out.mkdir(parents=True, exist_ok=True)
     rows = []
