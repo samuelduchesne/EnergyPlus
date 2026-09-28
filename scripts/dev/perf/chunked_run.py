@@ -58,6 +58,21 @@ def rewrite_runperiod(idf_text: str, begin: tuple[int, int], end: tuple[int, int
 
 
 SIMCONTROL_RE = re.compile(r"^\s*SimulationControl\s*,.*?;", re.M | re.S)
+SHADOWCALC_RE = re.compile(r"^\s*ShadowCalculation\s*,.*?;", re.M | re.S)
+
+
+def set_shading_update_days(idf_text: str, days: int) -> str:
+    """Sets ShadowCalculation 'Shading Calculation Update Frequency' (field 3). A chunk whose length is not a
+    multiple of the update period sees a different averaged shading day at its end than the full year does;
+    daily updates remove that effect for the comparison (the orchestrator will align chunks instead)."""
+    m = SHADOWCALC_RE.search(idf_text)
+    if not m:
+        return idf_text + f"\nShadowCalculation,PolygonClipping,Periodic,{days};\n"
+    fields = strip_comments(m.group(0))
+    while len(fields) < 4:
+        fields.append("")
+    fields[3] = str(days)
+    return idf_text[: m.start()] + ",\n    ".join(fields) + ";" + idf_text[m.end() :]
 
 
 def enable_runperiod_simulation(idf_text: str) -> str:
@@ -121,7 +136,10 @@ def parse_eso(path: Path, run_period_name: str) -> dict:
                 p = line.split(",", 2)
                 if len(p) == 3 and p[0].isdigit() and int(p[0]) > 5:
                     rest = p[2].split("!")[0].strip()
-                    key, _, var = rest.partition(",")
+                    if "," in rest:
+                        key, _, var = rest.partition(",")
+                    else:  # meters have no key
+                        key, var = "", rest
                     names[int(p[0])] = (key.strip(), var.strip())
                 continue
             if line.startswith("End of Data"):
@@ -156,7 +174,7 @@ def compare(ref: dict, chunk: dict, begin, end) -> dict:
             for (m, d, h), v in series.items():
                 if in_range((m, d), begin, end) and (m, d, h) in rseries:
                     temp_abs.append(abs(v - rseries[(m, d, h)]))
-        elif "[J]" in var or key == "":
+        elif key == "":
             tot_c = tot_r = 0.0
             hourly_rel = []
             for (m, d, h), v in series.items():
@@ -189,11 +207,14 @@ def main() -> int:
     ap.add_argument("--year", type=int, default=2017, help="calendar year fixed in every RunPeriod (weekday alignment)")
     ap.add_argument("--min-warmup-days", type=int, default=None, help="override Building minimum warm-up days for chunks")
     ap.add_argument("--skip-reference", action="store_true", help="reuse an existing reference run in OUT/reference")
+    ap.add_argument("--shading-update-days", type=int, default=None, help="override the shading calculation update frequency in all inputs")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
     args.exe, args.epw, args.idf, args.out = (p.resolve() for p in (args.exe, args.epw, args.idf, args.out))
     text = enable_runperiod_simulation(args.idf.read_text(errors="replace"))
+    if args.shading_update_days is not None:
+        text = set_shading_update_days(text, args.shading_update_days)
     fields = strip_comments(RUNPERIOD_RE.search(text).group(0))
     run_period_name = fields[1]
 
@@ -260,8 +281,13 @@ def main() -> int:
 
     ref_wall = results.get("reference", {}).get("wall")
     chunk_walls = [results[c["name"]]["wall"] for c in chunks if c["name"] in results]
-    if ref_wall and chunk_walls:
-        print(f"\nreference wall {ref_wall:.1f} s; chunk walls: max {max(chunk_walls):.1f} s, mean {statistics.fmean(chunk_walls):.1f} s (run {args.jobs} at a time; single-chunk times are inflated by sharing the machine)")
+    if chunk_walls:
+        print(f"\nchunk walls: max {max(chunk_walls):.1f} s, mean {statistics.fmean(chunk_walls):.1f} s, {len(chunk_walls)} chunks run {args.jobs} at a time")
+        if args.skip_reference:
+            print(f"all chunks wall {wall_total:.1f} s (chunks only)")
+            report["chunks_wall_s"] = wall_total
+        if ref_wall:
+            print(f"reference wall {ref_wall:.1f} s")
     (args.out / "report.json").write_text(json.dumps(report, indent=1, default=str))
     return 0
 
