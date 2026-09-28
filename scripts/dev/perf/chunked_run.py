@@ -57,6 +57,21 @@ def rewrite_runperiod(idf_text: str, begin: tuple[int, int], end: tuple[int, int
     return idf_text[: matches[0].start()] + obj + idf_text[matches[0].end() :]
 
 
+SIMCONTROL_RE = re.compile(r"^\s*SimulationControl\s*,.*?;", re.M | re.S)
+
+
+def enable_runperiod_simulation(idf_text: str) -> str:
+    """Sets SimulationControl 'Run Simulation for Weather File Run Periods' to Yes (test files rely on -a)."""
+    m = SIMCONTROL_RE.search(idf_text)
+    if not m:
+        return idf_text
+    fields = strip_comments(m.group(0))
+    while len(fields) < 6:
+        fields.append("")
+    fields[5] = "Yes"
+    return idf_text[: m.start()] + ",\n    ".join(fields) + ";" + idf_text[m.end() :]
+
+
 def make_chunks(months_per_chunk: int, overlap_days: int, year: int):
     chunks = []
     m = 1
@@ -178,7 +193,7 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     args.exe, args.epw, args.idf, args.out = (p.resolve() for p in (args.exe, args.epw, args.idf, args.out))
-    text = args.idf.read_text(errors="replace")
+    text = enable_runperiod_simulation(args.idf.read_text(errors="replace"))
     fields = strip_comments(RUNPERIOD_RE.search(text).group(0))
     run_period_name = fields[1]
 
