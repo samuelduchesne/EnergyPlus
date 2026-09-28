@@ -49,6 +49,7 @@
 #define Psychrometrics_hh_INCLUDED
 
 // C++ Headers
+#include <bit>
 #include <cassert>
 #include <cmath>
 
@@ -1070,13 +1071,8 @@ namespace Psychrometrics {
     )
     {
         std::uint64_t constexpr Grid_Shift = 64 - 12 - psatprecision_bits;
-        DISABLE_WARNING_PUSH
-        DISABLE_WARNING_STRICT_ALIASING
-        Int64 Tdb_tag(*reinterpret_cast<Int64 const *>(&T) >> Grid_Shift);
-        Tdb_tag <<= Grid_Shift;
-        Real64 const Tdb_tag_r = *reinterpret_cast<Real64 const *>(&Tdb_tag);
-        DISABLE_WARNING_POP
-        return PsyPsatFnTemp_raw(state, Tdb_tag_r, CalledFrom);
+        Int64 const Tdb_tag = (std::bit_cast<Int64>(T) >> Grid_Shift) << Grid_Shift; // same quantization as PsyPsatFnTemp
+        return PsyPsatFnTemp_raw(state, std::bit_cast<Real64>(Tdb_tag), CalledFrom);
     }
 
 #else
